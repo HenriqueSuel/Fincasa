@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash -c 'shopt -s dotglob nullglob; mv app/* .')"
+    ]
+  }
+}
