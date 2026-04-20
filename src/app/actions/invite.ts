@@ -58,26 +58,35 @@ export async function createInvite(): Promise<{ token: string; url: string }> {
 export async function getInviteByToken(
   token: string,
 ): Promise<InviteDetails | null> {
-  const query = await adminDb()
-    .collectionGroup("invites")
-    .where("token", "==", token)
-    .limit(1)
-    .get();
+  try {
+    const query = await adminDb()
+      .collectionGroup("invites")
+      .where("token", "==", token)
+      .limit(1)
+      .get();
 
-  if (query.empty) return null;
-  const doc = query.docs[0]!;
-  const data = doc.data();
-  const expiresAt = (data.expiresAt as Timestamp).toMillis();
-  const expired = expiresAt < Date.now();
-  const status = expired && data.status === "pending" ? "expired" : data.status;
+    if (query.empty) return null;
+    const doc = query.docs[0]!;
+    const data = doc.data();
+    const expiresAt = (data.expiresAt as Timestamp).toMillis();
+    const expired = expiresAt < Date.now();
+    const status = expired && data.status === "pending" ? "expired" : data.status;
 
-  return {
-    token: data.token,
-    householdName: data.householdName,
-    invitedByName: data.invitedByName,
-    expiresAt,
-    status,
-  };
+    return {
+      token: data.token,
+      householdName: data.householdName,
+      invitedByName: data.invitedByName,
+      expiresAt,
+      status,
+    };
+  } catch (err) {
+    console.error(
+      "[getInviteByToken] falhou ao consultar convite",
+      { token: token.slice(0, 8) + "…" },
+      err,
+    );
+    throw err;
+  }
 }
 
 export type AcceptInviteState = ActionState<"monthlyIncome">;

@@ -305,29 +305,40 @@ export async function removeListItem(
   const ctx = await requireHouseholdContext();
   const db = adminDb();
   const householdRef = db.collection("households").doc(ctx.householdId);
-  const entryRef = householdRef.collection("shoppingList").doc(entryId);
 
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(entryRef);
-    if (!snap.exists) return;
-    if (snap.data()?.status === "bought") {
-      throw new Error("Itens comprados são removidos ao finalizar a lista.");
-    }
-    tx.delete(entryRef);
+  try {
+    await db.runTransaction(async (tx) => {
+      // Fase 1: todos os reads (Firestore exige reads antes de writes)
+      const listSnap = await tx.get(householdRef.collection("shoppingList"));
+      const target = listSnap.docs.find((d) => d.id === entryId);
+      if (!target) return;
+      if (target.data().status === "bought") {
+        throw new Error("Itens comprados são removidos ao finalizar a lista.");
+      }
 
-    // Auto-finalize: se só restam bought, apaga todos
-    const remaining = await tx.get(
-      householdRef
-        .collection("shoppingList")
-        .where("status", "in", ["pending", "checked"]),
-    );
-    if (remaining.empty) {
-      const bought = await tx.get(
-        householdRef.collection("shoppingList").where("status", "==", "bought"),
-      );
-      for (const d of bought.docs) tx.delete(d.ref);
-    }
-  });
+      // Sobra alguma entry ativa além da que vamos remover?
+      const stillActive = listSnap.docs.some((d) => {
+        if (d.id === entryId) return false;
+        const s = d.data().status;
+        return s === "pending" || s === "checked";
+      });
+
+      // Fase 2: writes
+      tx.delete(target.ref);
+
+      if (!stillActive) {
+        // Auto-finalize: limpa também as bought existentes
+        for (const d of listSnap.docs) {
+          if (d.id === entryId) continue;
+          if (d.data().status === "bought") tx.delete(d.ref);
+        }
+      }
+    });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Não foi possível remover.",
+    };
+  }
 
   revalidatePath("/shopping");
   revalidatePath("/");
