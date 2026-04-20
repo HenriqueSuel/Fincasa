@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Settings, UserPlus, Target } from "lucide-react";
+import { Settings, UserPlus, Target, ShoppingCart } from "lucide-react";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { BUDGET_ALLOCATION, CATEGORIES } from "@/lib/categories";
 import { formatBRL } from "@/lib/money";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
 import { listGoals } from "@/lib/goals-query";
+import { listShoppingList } from "@/lib/shopping-query";
 import { ViewToggle } from "@/components/transactions/view-toggle";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,10 @@ export default async function Dashboard({
   });
 
   const goals = await listGoals(householdId, { activeOnly: true });
+  const shoppingEntries = await listShoppingList(householdId);
+  const shoppingActiveCount = shoppingEntries.filter(
+    (e) => e.status !== "bought",
+  ).length;
 
   const income = transactions
     .filter((t) => t.type === "income")
@@ -120,6 +125,23 @@ export default async function Dashboard({
           </div>
         </Link>
       ) : null}
+
+      <Link
+        href="/shopping"
+        className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <ShoppingCart className="size-5" />
+        </div>
+        <div className="flex-1">
+          <p className="font-medium">Lista de mercado</p>
+          <p className="text-xs text-muted-foreground">
+            {shoppingActiveCount === 0
+              ? "Lista vazia. Toque pra adicionar itens."
+              : `${shoppingActiveCount} ${shoppingActiveCount === 1 ? "item" : "itens"} na lista`}
+          </p>
+        </div>
+      </Link>
 
       <section className="rounded-2xl border border-border bg-card p-5">
         <p className="text-xs text-muted-foreground">Entradas no mês</p>

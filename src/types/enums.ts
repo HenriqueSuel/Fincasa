@@ -47,3 +47,40 @@ export type ThemePreference = (typeof THEME_PREFERENCES)[number];
 
 export const DASHBOARD_VIEWS = ["mine", "partner", "family"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
+
+export const SHOPPING_SECTIONS = [
+  "frutas_verduras",
+  "padaria",
+  "carnes_peixes",
+  "frios_laticinios",
+  "bebidas",
+  "mercearia",
+  "congelados",
+  "limpeza",
+  "higiene",
+  "outros",
+] as const;
+export type ShoppingSection = (typeof SHOPPING_SECTIONS)[number];
+
+export const SHOPPING_SECTION_LABELS: Record<ShoppingSection, string> = {
+  frutas_verduras: "Frutas e verduras",
+  padaria: "Padaria",
+  carnes_peixes: "Carnes e peixes",
+  frios_laticinios: "Frios e laticínios",
+  bebidas: "Bebidas",
+  mercearia: "Mercearia",
+  congelados: "Congelados",
+  limpeza: "Limpeza",
+  higiene: "Higiene",
+  outros: "Outros",
+};
+
+export const WEIGHT_UNITS = ["kg", "g", "L", "ml", "un"] as const;
+export type WeightUnit = (typeof WEIGHT_UNITS)[number];
+
+export const SHOPPING_ENTRY_STATUSES = [
+  "pending",
+  "checked",
+  "bought",
+] as const;
+export type ShoppingEntryStatus = (typeof SHOPPING_ENTRY_STATUSES)[number];

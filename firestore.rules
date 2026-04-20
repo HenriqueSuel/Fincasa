@@ -86,6 +86,24 @@ service cloud.firestore {
         allow read: if true;
         allow write: if false;
       }
+
+      // --------------------------------------------------------------
+      // Subcoleções: shopping
+      // --------------------------------------------------------------
+      match /shoppingItems/{itemId} {
+        allow read, write: if isMember(householdId);
+        match /purchases/{purchaseId} {
+          allow read, write: if isMember(householdId);
+        }
+      }
+
+      match /shoppingList/{entryId} {
+        allow read, write: if isMember(householdId);
+      }
+
+      match /shoppingTrips/{tripId} {
+        allow read, write: if isMember(householdId);
+      }
     }
   }
 }

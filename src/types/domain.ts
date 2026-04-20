@@ -8,9 +8,12 @@ import type {
   MemberRole,
   PaymentMethod,
   RecurringFrequency,
+  ShoppingEntryStatus,
+  ShoppingSection,
   ThemePreference,
   TransactionCategory,
   TransactionType,
+  WeightUnit,
 } from "./enums";
 
 /**
@@ -79,6 +82,7 @@ export interface Transaction {
   subcategory: string;
   customSubcategory?: string;
   goalId?: string;
+  tripId?: string;
   date: Date;
   paymentMethod?: PaymentMethod;
   createdBy: string;
@@ -124,5 +128,76 @@ export interface CustomSubcategory {
   name: string;
   icon?: string;
   createdBy: string;
+  createdAt: Date;
+}
+
+export interface WeightSpec {
+  value: number;
+  unit: WeightUnit;
+}
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  nameLower: string;
+  nameNormalized: string;
+  section: ShoppingSection;
+  defaultBrand?: string;
+  defaultWeight?: WeightSpec;
+  defaultQuantity?: number;
+  lastPrice?: number;
+  averagePrice90d?: number;
+  purchaseCount: number;
+  lastPurchasedAt?: Date;
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface ShoppingPurchase {
+  id: string;
+  price: number;
+  brand?: string;
+  store?: string;
+  weight?: WeightSpec;
+  quantity: number;
+  tripId: string;
+  purchasedBy: string;
+  purchasedByName: string;
+  purchasedAt: Date;
+}
+
+export interface ShoppingListEntry {
+  id: string;
+  itemId: string;
+  itemName: string;
+  itemSection: ShoppingSection;
+  desiredBrand?: string;
+  desiredWeight?: WeightSpec;
+  desiredQuantity: number;
+  averagePrice90dSnapshot?: number;
+  lastPriceSnapshot?: number;
+  status: ShoppingEntryStatus;
+  priceAtCheckout?: number;
+  brandAtCheckout?: string;
+  weightAtCheckout?: WeightSpec;
+  quantityAtCheckout?: number;
+  tripId?: string;
+  purchaseId?: string;
+  addedBy: string;
+  addedAt: Date;
+  checkedAt?: Date;
+  boughtAt?: Date;
+}
+
+export interface ShoppingTrip {
+  id: string;
+  storeName: string;
+  total: number;
+  paymentMethod?: PaymentMethod;
+  transactionId: string;
+  itemCount: number;
+  purchasedBy: string;
+  purchasedByName: string;
+  purchasedAt: Date;
   createdAt: Date;
 }

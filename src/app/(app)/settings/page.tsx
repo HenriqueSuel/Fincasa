@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Users, Tag, BarChart3, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft,
+  Users,
+  Tag,
+  BarChart3,
+  ShoppingCart,
+  ChevronRight,
+} from "lucide-react";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
 export const metadata: Metadata = { title: "Configurações" };
@@ -23,6 +30,12 @@ const sections = [
     label: "Relatórios",
     description: "Gráficos e análises",
     icon: BarChart3,
+  },
+  {
+    href: "/shopping",
+    label: "Lista de mercado",
+    description: "Histórico e ficha dos produtos",
+    icon: ShoppingCart,
   },
 ];
 

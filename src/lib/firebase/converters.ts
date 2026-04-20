@@ -5,9 +5,15 @@ import type {
   Goal,
   Household,
   Invite,
+  ShoppingItem,
+  ShoppingListEntry,
+  ShoppingPurchase,
+  ShoppingTrip,
   Transaction,
   User,
+  WeightSpec,
 } from "@/types/domain";
+import type { WeightUnit } from "@/types/enums";
 
 type Snap = FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot;
 
@@ -100,6 +106,7 @@ export function toTransaction(snap: Snap): Transaction {
     subcategory: d.subcategory ?? "",
     customSubcategory: d.customSubcategory ?? undefined,
     goalId: d.goalId ?? undefined,
+    tripId: d.tripId ?? undefined,
     date: ts(d.date),
     paymentMethod: d.paymentMethod ?? undefined,
     createdBy: d.createdBy,
@@ -186,5 +193,98 @@ export function toCustomSubcategory(snap: Snap): CustomSubcategory {
     icon: d.icon ?? undefined,
     createdBy: d.createdBy,
     createdAt: tsOpt(d.createdAt) ?? new Date(0),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Shopping
+// ---------------------------------------------------------------------------
+
+function toWeight(raw: unknown): WeightSpec | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as { value?: unknown; unit?: unknown };
+  if (typeof r.value !== "number" || typeof r.unit !== "string") return undefined;
+  return { value: r.value, unit: r.unit as WeightUnit };
+}
+
+export function toShoppingItem(snap: Snap): ShoppingItem {
+  const d = snap.data();
+  if (!d) throw new Error("ShoppingItem doc missing");
+  return {
+    id: snap.id,
+    name: d.name,
+    nameLower: d.nameLower ?? (d.name as string).toLowerCase(),
+    nameNormalized: d.nameNormalized ?? d.nameLower ?? "",
+    section: d.section ?? "outros",
+    defaultBrand: d.defaultBrand ?? undefined,
+    defaultWeight: toWeight(d.defaultWeight),
+    defaultQuantity: d.defaultQuantity ?? undefined,
+    lastPrice: d.lastPrice ?? undefined,
+    averagePrice90d: d.averagePrice90d ?? undefined,
+    purchaseCount: Number(d.purchaseCount ?? 0),
+    lastPurchasedAt: tsOpt(d.lastPurchasedAt),
+    createdBy: d.createdBy,
+    createdAt: ts(d.createdAt),
+  };
+}
+
+export function toShoppingPurchase(snap: Snap): ShoppingPurchase {
+  const d = snap.data();
+  if (!d) throw new Error("ShoppingPurchase doc missing");
+  return {
+    id: snap.id,
+    price: Number(d.price ?? 0),
+    brand: d.brand ?? undefined,
+    store: d.store ?? undefined,
+    weight: toWeight(d.weight),
+    quantity: Number(d.quantity ?? 1),
+    tripId: d.tripId,
+    purchasedBy: d.purchasedBy,
+    purchasedByName: d.purchasedByName ?? "",
+    purchasedAt: ts(d.purchasedAt),
+  };
+}
+
+export function toShoppingListEntry(snap: Snap): ShoppingListEntry {
+  const d = snap.data();
+  if (!d) throw new Error("ShoppingListEntry doc missing");
+  return {
+    id: snap.id,
+    itemId: d.itemId,
+    itemName: d.itemName,
+    itemSection: d.itemSection ?? "outros",
+    desiredBrand: d.desiredBrand ?? undefined,
+    desiredWeight: toWeight(d.desiredWeight),
+    desiredQuantity: Number(d.desiredQuantity ?? 1),
+    averagePrice90dSnapshot: d.averagePrice90dSnapshot ?? undefined,
+    lastPriceSnapshot: d.lastPriceSnapshot ?? undefined,
+    status: d.status ?? "pending",
+    priceAtCheckout: d.priceAtCheckout ?? undefined,
+    brandAtCheckout: d.brandAtCheckout ?? undefined,
+    weightAtCheckout: toWeight(d.weightAtCheckout),
+    quantityAtCheckout: d.quantityAtCheckout ?? undefined,
+    tripId: d.tripId ?? undefined,
+    purchaseId: d.purchaseId ?? undefined,
+    addedBy: d.addedBy,
+    addedAt: ts(d.addedAt),
+    checkedAt: tsOpt(d.checkedAt),
+    boughtAt: tsOpt(d.boughtAt),
+  };
+}
+
+export function toShoppingTrip(snap: Snap): ShoppingTrip {
+  const d = snap.data();
+  if (!d) throw new Error("ShoppingTrip doc missing");
+  return {
+    id: snap.id,
+    storeName: d.storeName,
+    total: Number(d.total ?? 0),
+    paymentMethod: d.paymentMethod ?? undefined,
+    transactionId: d.transactionId,
+    itemCount: Number(d.itemCount ?? 0),
+    purchasedBy: d.purchasedBy,
+    purchasedByName: d.purchasedByName ?? "",
+    purchasedAt: ts(d.purchasedAt),
+    createdAt: ts(d.createdAt),
   };
 }

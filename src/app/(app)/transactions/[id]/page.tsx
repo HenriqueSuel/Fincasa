@@ -1,18 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { toTransaction } from "@/lib/firebase/converters";
 import { listGoals } from "@/lib/goals-query";
 import { listCustomSubcategories } from "@/lib/subcategories-query";
+import { getTrip } from "@/lib/shopping-query";
 import { TransactionForm } from "@/components/transactions/transaction-form";
 import { updateTransaction } from "@/app/actions/transaction";
 import { formatBRL } from "@/lib/money";
 import { DeleteTransactionButton } from "./delete-button";
 import { DeleteInstallmentGroupButton } from "./delete-group-button";
 import { DeleteRecurringGroupButton } from "./delete-recurring-button";
+
+const BR_DATE = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
 
 export const metadata: Metadata = { title: "Editar transação" };
 
@@ -36,9 +43,10 @@ export default async function EditTransactionPage({
   if (tx.createdBy !== uid) redirect("/transactions");
 
   const boundUpdate = updateTransaction.bind(null, id);
-  const [goals, customSubcategories] = await Promise.all([
+  const [goals, customSubcategories, trip] = await Promise.all([
     listGoals(householdId, { activeOnly: true }),
     listCustomSubcategories(householdId),
+    tx.tripId ? getTrip(householdId, tx.tripId) : Promise.resolve(null),
   ]);
 
   return (
@@ -56,6 +64,27 @@ export default async function EditTransactionPage({
         </div>
         <DeleteTransactionButton id={id} />
       </div>
+
+      {trip ? (
+        <Link
+          href={`/shopping/trips/${trip.id}`}
+          className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
+        >
+          <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ShoppingCart className="size-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">
+              Veio da lista de mercado
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {trip.storeName} · {trip.itemCount}{" "}
+              {trip.itemCount === 1 ? "item" : "itens"} ·{" "}
+              {BR_DATE.format(trip.purchasedAt)}
+            </p>
+          </div>
+        </Link>
+      ) : null}
 
       {tx.installment ? (
         <div className="rounded-xl border border-border bg-card p-4 text-sm">

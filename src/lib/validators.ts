@@ -3,8 +3,10 @@ import {
   GOAL_CATEGORY_IDS,
   GOAL_PRIORITY_IDS,
   PAYMENT_METHODS,
+  SHOPPING_SECTIONS,
   TRANSACTION_CATEGORY_IDS,
   TRANSACTION_TYPES,
+  WEIGHT_UNITS,
 } from "@/types/enums";
 
 const MAX_INSTALLMENTS = 24;
@@ -95,3 +97,77 @@ export const customSubcategorySchema = z.object({
 });
 
 export type CustomSubcategoryInput = z.infer<typeof customSubcategorySchema>;
+
+// ---------------------------------------------------------------------------
+// Shopping
+// ---------------------------------------------------------------------------
+
+export const weightSchema = z.object({
+  value: z.coerce.number().positive("Valor inválido"),
+  unit: z.enum(WEIGHT_UNITS),
+});
+
+export const addListItemSchema = z.object({
+  name: z.string().trim().min(1, "Nome obrigatório").max(80),
+});
+
+export type AddListItemInput = z.infer<typeof addListItemSchema>;
+
+export const linkListItemSchema = z.object({
+  itemId: z.string().min(1),
+});
+
+export type LinkListItemInput = z.infer<typeof linkListItemSchema>;
+
+export const updateListEntrySchema = z.object({
+  desiredBrand: z.string().trim().max(60).optional(),
+  desiredWeight: weightSchema.optional(),
+  desiredQuantity: z.coerce.number().int().min(1).max(999).optional(),
+});
+
+export type UpdateListEntryInput = z.infer<typeof updateListEntrySchema>;
+
+export const toggleCheckSchema = z.object({
+  price: z.coerce.number().positive().optional(),
+  brand: z.string().trim().max(60).optional(),
+  weight: weightSchema.optional(),
+  quantity: z.coerce.number().int().min(1).max(999).optional(),
+});
+
+export type ToggleCheckInput = z.infer<typeof toggleCheckSchema>;
+
+export const updateShoppingItemSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  section: z.enum(SHOPPING_SECTIONS),
+  defaultBrand: z.string().trim().max(60).optional(),
+});
+
+export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;
+
+export const recordPurchaseSchema = z
+  .object({
+    amount: z.coerce.number().positive("Valor total deve ser maior que zero"),
+    description: z
+      .string()
+      .trim()
+      .min(1, "Descrição obrigatória")
+      .max(120, "Máximo 120 caracteres"),
+    storeName: z
+      .string()
+      .trim()
+      .min(1, "Mercado obrigatório")
+      .max(80, "Máximo 80 caracteres"),
+    paymentMethod: z.enum(PAYMENT_METHODS, { error: "Pagamento obrigatório" }),
+    date: z.coerce.date({ error: "Data inválida" }),
+    installments: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_INSTALLMENTS, `Máximo ${MAX_INSTALLMENTS}x`),
+  })
+  .refine(
+    (v) => !(v.installments > 1 && v.paymentMethod !== "credit"),
+    { message: "Parcelamento só no crédito", path: ["installments"] },
+  );
+
+export type RecordPurchaseInput = z.infer<typeof recordPurchaseSchema>;
