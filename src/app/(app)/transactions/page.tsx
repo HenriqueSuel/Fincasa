@@ -41,6 +41,7 @@ function categoryIcon(category: string, subcategory: string): string {
   if (sub) return sub.icon;
   if (category === "income") return "💰";
   if (category === "transfer") return "↔️";
+  if (category === "loans") return "🤝";
   return "💸";
 }
 
@@ -60,6 +61,7 @@ export default async function TransactionsPage({
     m?: string;
     cat?: string;
     q?: string;
+    v?: string;
   }>;
 }) {
   const {
@@ -68,6 +70,7 @@ export default async function TransactionsPage({
     m: rawM,
     cat: rawCat,
     q: rawQ,
+    v: rawV,
   } = await searchParams;
   const ctx = await requireHouseholdContext();
   const { uid, householdId, partnerId } = ctx;
@@ -100,6 +103,10 @@ export default async function TransactionsPage({
       ? rawCat
       : "all";
   const searchTerm = (rawQ ?? "").trim().toLowerCase();
+  const valueCents = (() => {
+    const n = Number.parseInt(rawV ?? "", 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
 
   const transactions = allTransactions.filter((t) => {
     if (category !== "all") {
@@ -112,6 +119,9 @@ export default async function TransactionsPage({
     if (searchTerm) {
       const hay = `${t.description} ${t.subcategory} ${t.createdByName}`.toLowerCase();
       if (!hay.includes(searchTerm)) return false;
+    }
+    if (valueCents !== null) {
+      if (Math.round(t.amount * 100) !== valueCents) return false;
     }
     return true;
   });
@@ -142,6 +152,7 @@ export default async function TransactionsPage({
       m: String(monthIndex),
       cat: category === "all" ? undefined : category,
       q: searchTerm || undefined,
+      v: valueCents !== null ? String(valueCents) : undefined,
       ...overrides,
     };
     const sp = new URLSearchParams();
@@ -209,6 +220,7 @@ export default async function TransactionsPage({
         <TransactionsFilters
           currentCategory={category}
           currentSearch={searchTerm}
+          currentValueCents={valueCents ?? 0}
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -230,7 +242,7 @@ export default async function TransactionsPage({
       {transactions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            {category !== "all" || searchTerm
+            {category !== "all" || searchTerm || valueCents !== null
               ? "Nenhuma transação bate com os filtros."
               : "Nenhuma transação nesse mês."}
           </p>

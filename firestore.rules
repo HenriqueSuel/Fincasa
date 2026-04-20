@@ -111,6 +111,25 @@ service cloud.firestore {
       match /creditCards/{cardId} {
         allow read, write: if isMember(householdId);
       }
+
+      // --------------------------------------------------------------
+      // Subcoleções: loans (dinheiro emprestado) + repayments
+      // --------------------------------------------------------------
+      match /loans/{loanId} {
+        allow read: if isMember(householdId);
+        allow create: if isMember(householdId) &&
+                         request.resource.data.createdBy == request.auth.uid;
+        allow update, delete: if isMember(householdId) &&
+                                 resource.data.createdBy == request.auth.uid;
+
+        match /repayments/{repaymentId} {
+          allow read: if isMember(householdId);
+          allow create: if isMember(householdId) &&
+                           request.resource.data.createdBy == request.auth.uid;
+          allow update, delete: if isMember(householdId) &&
+                                   resource.data.createdBy == request.auth.uid;
+        }
+      }
     }
   }
 }

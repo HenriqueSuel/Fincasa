@@ -178,6 +178,48 @@ export const updateShoppingItemSchema = z.object({
 
 export type UpdateShoppingItemInput = z.infer<typeof updateShoppingItemSchema>;
 
+export const loanSchema = z
+  .object({
+    debtorName: z
+      .string()
+      .trim()
+      .min(1, "Nome obrigatório")
+      .max(60, "Máximo 60 caracteres"),
+    totalAmount: z.coerce
+      .number({ error: "Valor inválido" })
+      .positive("Valor deve ser maior que zero"),
+    lendDate: z.coerce.date({ error: "Data inválida" }),
+    paymentMethod: z.enum(PAYMENT_METHODS, { error: "Pagamento obrigatório" }),
+    cardId: z.string().trim().optional(),
+    installments: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_INSTALLMENTS, `Máximo ${MAX_INSTALLMENTS}x`),
+    description: z
+      .string()
+      .trim()
+      .max(120, "Máximo 120 caracteres")
+      .optional(),
+  })
+  .refine(
+    (v) => !(v.installments > 1 && v.paymentMethod !== "credit"),
+    { message: "Parcelamento só no crédito", path: ["installments"] },
+  );
+
+export type LoanInput = z.infer<typeof loanSchema>;
+
+export const repaymentSchema = z.object({
+  amount: z.coerce
+    .number({ error: "Valor inválido" })
+    .positive("Valor deve ser maior que zero"),
+  paidAt: z.coerce.date({ error: "Data inválida" }),
+  paymentMethod: z.enum(PAYMENT_METHODS).optional(),
+  note: z.string().trim().max(120, "Máximo 120 caracteres").optional(),
+});
+
+export type RepaymentInput = z.infer<typeof repaymentSchema>;
+
 export const recordPurchaseSchema = z
   .object({
     amount: z.coerce.number().positive("Valor total deve ser maior que zero"),

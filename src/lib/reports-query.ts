@@ -83,7 +83,9 @@ export async function memberBreakdown(
   const { from, to } = monthRange(year, month);
   const txs = await listTransactions({ householdId, from, to });
   return members.map((m) => {
-    const own = txs.filter((t) => t.createdBy === m.id);
+    const own = txs.filter(
+      (t) => t.createdBy === m.id && t.category !== "loans",
+    );
     const income = own
       .filter((t) => t.type === "income")
       .reduce((s, t) => s + t.amount, 0);
@@ -169,6 +171,7 @@ export async function monthlyTrend(
     let expense = 0;
     for (const d of snap.docs) {
       const t = d.data();
+      if (t.category === "loans") continue;
       if (t.type === "income") income += t.amount;
       else if (t.type === "expense") expense += t.amount;
     }

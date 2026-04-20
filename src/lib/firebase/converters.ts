@@ -6,6 +6,9 @@ import type {
   Goal,
   Household,
   Invite,
+  Loan,
+  LoanRepayment,
+  LoanScheduleEntry,
   ShoppingItem,
   ShoppingListEntry,
   ShoppingPurchase,
@@ -14,7 +17,7 @@ import type {
   User,
   WeightSpec,
 } from "@/types/domain";
-import type { WeightUnit } from "@/types/enums";
+import type { LoanStatus, PaymentMethod, WeightUnit } from "@/types/enums";
 
 type Snap = FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot;
 
@@ -109,6 +112,7 @@ export function toTransaction(snap: Snap): Transaction {
     goalId: d.goalId ?? undefined,
     tripId: d.tripId ?? undefined,
     cardId: d.cardId ?? undefined,
+    loanId: d.loanId ?? undefined,
     date: ts(d.date),
     paymentMethod: d.paymentMethod ?? undefined,
     createdBy: d.createdBy,
@@ -285,6 +289,62 @@ export function toCreditCard(snap: Snap): CreditCard {
     dueDay: Number(d.dueDay ?? 10),
     color: d.color ?? undefined,
     createdBy: d.createdBy,
+    createdAt: ts(d.createdAt),
+  };
+}
+
+function toLoanSchedule(raw: unknown): LoanScheduleEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LoanScheduleEntry[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") continue;
+    const r = e as { dueDate?: unknown; amount?: unknown; transactionId?: unknown };
+    if (typeof r.amount !== "number" || typeof r.transactionId !== "string") continue;
+    const dueDate = tsOpt(r.dueDate);
+    if (!dueDate) continue;
+    out.push({ dueDate, amount: r.amount, transactionId: r.transactionId });
+  }
+  return out;
+}
+
+export function toLoan(snap: Snap): Loan {
+  const d = snap.data();
+  if (!d) throw new Error("Loan doc missing");
+  const total = Number(d.totalAmount ?? 0);
+  const repaid = Number(d.repaidAmount ?? 0);
+  return {
+    id: snap.id,
+    debtorName: String(d.debtorName ?? ""),
+    debtorNameLower: String(d.debtorNameLower ?? d.debtorName ?? "").toLowerCase(),
+    totalAmount: total,
+    outstandingAmount: Number(d.outstandingAmount ?? Math.max(0, total - repaid)),
+    repaidAmount: repaid,
+    lendDate: ts(d.lendDate),
+    paymentMethod: (d.paymentMethod ?? "pix") as PaymentMethod,
+    cardId: d.cardId ?? undefined,
+    installments: Number(d.installments ?? 1),
+    description: d.description ?? undefined,
+    status: (d.status ?? "active") as LoanStatus,
+    schedule: toLoanSchedule(d.schedule),
+    createdBy: d.createdBy,
+    createdByName: d.createdByName ?? "",
+    createdAt: ts(d.createdAt),
+    updatedAt: ts(d.updatedAt ?? d.createdAt),
+  };
+}
+
+export function toLoanRepayment(snap: Snap): LoanRepayment {
+  const d = snap.data();
+  if (!d) throw new Error("LoanRepayment doc missing");
+  return {
+    id: snap.id,
+    amount: Number(d.amount ?? 0),
+    paidAt: ts(d.paidAt),
+    paymentMethod: (d.paymentMethod ?? undefined) as PaymentMethod | undefined,
+    note: d.note ?? undefined,
+    transactionId: String(d.transactionId ?? ""),
+    createdBy: d.createdBy,
+    createdByName: d.createdByName ?? "",
     createdAt: ts(d.createdAt),
   };
 }

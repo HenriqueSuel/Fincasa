@@ -11,6 +11,8 @@ const MESSAGES: Record<string, { type: "success" | "info"; text: string }> = {
   "tx-updated": { type: "success", text: "Lançamento atualizado." },
   "goal-created": { type: "success", text: "Meta criada." },
   "goal-updated": { type: "success", text: "Meta atualizada." },
+  "loan-created": { type: "success", text: "Empréstimo registrado." },
+  "loan-cancelled": { type: "success", text: "Empréstimo apagado." },
 };
 
 export function ToastFromQuery() {

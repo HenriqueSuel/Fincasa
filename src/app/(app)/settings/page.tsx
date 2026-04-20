@@ -7,6 +7,7 @@ import {
   BarChart3,
   ShoppingCart,
   CreditCard,
+  HandCoins,
   ChevronRight,
 } from "lucide-react";
 import { SignOutButton } from "@/features/auth/sign-out-button";
@@ -43,6 +44,12 @@ const sections = [
     label: "Cartões de crédito",
     description: "Dia de fechamento e vencimento por cartão",
     icon: CreditCard,
+  },
+  {
+    href: "/loans",
+    label: "Empréstimos",
+    description: "Dinheiro que te devem",
+    icon: HandCoins,
   },
 ];
 

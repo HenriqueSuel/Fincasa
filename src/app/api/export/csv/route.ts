@@ -11,6 +11,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   goals: "Objetivos",
   income: "Receita",
   transfer: "Transferência",
+  loans: "Empréstimos",
 };
 
 const TYPE_LABEL: Record<string, string> = {

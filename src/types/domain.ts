@@ -5,6 +5,7 @@ import type {
   GoalPriority,
   GoalStatus,
   InviteStatus,
+  LoanStatus,
   MemberRole,
   PaymentMethod,
   RecurringFrequency,
@@ -84,6 +85,7 @@ export interface Transaction {
   goalId?: string;
   tripId?: string;
   cardId?: string;
+  loanId?: string;
   date: Date;
   paymentMethod?: PaymentMethod;
   createdBy: string;
@@ -211,5 +213,43 @@ export interface CreditCard {
   dueDay: number;
   color?: string;
   createdBy: string;
+  createdAt: Date;
+}
+
+export interface LoanScheduleEntry {
+  dueDate: Date;
+  amount: number;
+  transactionId: string;
+}
+
+export interface Loan {
+  id: string;
+  debtorName: string;
+  debtorNameLower: string;
+  totalAmount: number;
+  outstandingAmount: number;
+  repaidAmount: number;
+  lendDate: Date;
+  paymentMethod: PaymentMethod;
+  cardId?: string;
+  installments: number;
+  description?: string;
+  status: LoanStatus;
+  schedule: LoanScheduleEntry[];
+  createdBy: string;
+  createdByName: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface LoanRepayment {
+  id: string;
+  amount: number;
+  paidAt: Date;
+  paymentMethod?: PaymentMethod;
+  note?: string;
+  transactionId: string;
+  createdBy: string;
+  createdByName: string;
   createdAt: Date;
 }

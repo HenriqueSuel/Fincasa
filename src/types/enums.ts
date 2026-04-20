@@ -9,8 +9,12 @@ export const TRANSACTION_CATEGORY_IDS = [
   ...BUDGET_CATEGORY_IDS,
   "income",
   "transfer",
+  "loans",
 ] as const;
 export type TransactionCategory = (typeof TRANSACTION_CATEGORY_IDS)[number];
+
+export const LOAN_STATUSES = ["active", "settled", "cancelled"] as const;
+export type LoanStatus = (typeof LOAN_STATUSES)[number];
 
 export const TRANSACTION_TYPES = ["income", "expense", "transfer"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];

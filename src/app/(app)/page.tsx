@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { Settings, UserPlus, Target, ShoppingCart } from "lucide-react";
+import {
+  Settings,
+  UserPlus,
+  Target,
+  ShoppingCart,
+  HandCoins,
+} from "lucide-react";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { BUDGET_ALLOCATION, CATEGORIES } from "@/lib/categories";
 import { formatBRL } from "@/lib/money";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
 import { listGoals } from "@/lib/goals-query";
 import { listShoppingList } from "@/lib/shopping-query";
+import { listLoans } from "@/lib/loans-query";
 import { ViewToggle } from "@/components/transactions/view-toggle";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { cn } from "@/lib/utils";
@@ -47,8 +54,16 @@ export default async function Dashboard({
     (e) => e.status !== "bought",
   ).length;
 
+  const activeLoans = await listLoans(householdId, { activeOnly: true });
+  const loansOutstanding = activeLoans.reduce(
+    (s, l) => s + l.outstandingAmount,
+    0,
+  );
+  const loansDebtorCount = new Set(activeLoans.map((l) => l.debtorNameLower))
+    .size;
+
   const income = transactions
-    .filter((t) => t.type === "income")
+    .filter((t) => t.type === "income" && t.category !== "loans")
     .reduce((s, t) => s + t.amount, 0);
 
   const spentByCat = { essentials: 0, qualityOfLife: 0, goals: 0 };
@@ -139,6 +154,23 @@ export default async function Dashboard({
             {shoppingActiveCount === 0
               ? "Lista vazia. Toque pra adicionar itens."
               : `${shoppingActiveCount} ${shoppingActiveCount === 1 ? "item" : "itens"} na lista`}
+          </p>
+        </div>
+      </Link>
+
+      <Link
+        href="/loans"
+        className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <HandCoins className="size-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium">Te devem</p>
+          <p className="text-xs text-muted-foreground">
+            {loansDebtorCount === 0
+              ? "Nenhum empréstimo ativo."
+              : `${formatBRL(loansOutstanding)} · ${loansDebtorCount} ${loansDebtorCount === 1 ? "pessoa" : "pessoas"}`}
           </p>
         </div>
       </Link>
