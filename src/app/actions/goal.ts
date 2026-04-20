@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
+import { parseLocalDate } from "@/lib/dates";
 import { GOAL_CATEGORIES, GOAL_PRIORITIES } from "@/lib/goals";
 
 export interface GoalFormState {
@@ -51,16 +52,12 @@ function parse(formData: FormData) {
     errors.monthlyContribution = "Valor inválido";
   }
 
-  const startStr = String(formData.get("startDate") ?? "");
-  const endStr = String(formData.get("estimatedEndDate") ?? "");
-  const startDate = startStr ? new Date(startStr) : null;
-  const estimatedEndDate = endStr ? new Date(endStr) : null;
-  if (!startDate || Number.isNaN(startDate.getTime())) {
-    errors.startDate = "Data inicial inválida";
-  }
-  if (!estimatedEndDate || Number.isNaN(estimatedEndDate.getTime())) {
-    errors.estimatedEndDate = "Data final inválida";
-  }
+  const startDate = parseLocalDate(String(formData.get("startDate") ?? ""));
+  const estimatedEndDate = parseLocalDate(
+    String(formData.get("estimatedEndDate") ?? ""),
+  );
+  if (!startDate) errors.startDate = "Data inicial inválida";
+  if (!estimatedEndDate) errors.estimatedEndDate = "Data final inválida";
   if (startDate && estimatedEndDate && estimatedEndDate <= startDate) {
     errors.estimatedEndDate = "Data final deve ser depois da inicial";
   }

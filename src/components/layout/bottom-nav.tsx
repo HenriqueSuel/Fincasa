@@ -77,12 +77,13 @@ function NavItem({
   return (
     <Link
       href={item.href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex flex-col items-center justify-center gap-0.5 rounded-full px-3 py-1.5 transition-colors",
         active ? "text-primary" : "text-muted-foreground hover:text-foreground",
       )}
     >
-      <Icon className="size-5" />
+      <Icon className="size-5" aria-hidden="true" />
       <span className="text-[10px] font-medium">{item.label}</span>
     </Link>
   );

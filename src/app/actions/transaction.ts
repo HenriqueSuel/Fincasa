@@ -7,6 +7,7 @@ import { addMonths } from "date-fns";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
+import { parseLocalDate } from "@/lib/dates";
 
 export interface TransactionFormState {
   error?: string;
@@ -87,8 +88,8 @@ function parseFormData(formData: FormData): {
   if (!subcategory) errors.subcategory = "Subcategoria obrigatória";
 
   const rawDate = String(formData.get("date") ?? "");
-  const date = rawDate ? new Date(rawDate) : null;
-  if (!date || Number.isNaN(date.getTime())) errors.date = "Data inválida";
+  const date = parseLocalDate(rawDate);
+  if (!date) errors.date = "Data inválida";
 
   const customSubcategory =
     String(formData.get("customSubcategory") ?? "").trim() || undefined;

@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
       t.amount.toFixed(2).replace(".", ","),
       t.createdByName,
       t.paymentMethod ? (PAYMENT_LABEL[t.paymentMethod] ?? t.paymentMethod) : "",
-      t.installmentNumber && t.installmentCount
-        ? `${t.installmentNumber}/${t.installmentCount}`
+      t.installment
+        ? `${t.installment.number}/${t.installment.count}`
         : "",
     ]);
   }

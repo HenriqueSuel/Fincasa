@@ -1,27 +1,8 @@
 import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-
-export interface TransactionItem {
-  id: string;
-  type: "income" | "expense" | "transfer";
-  amount: number;
-  description: string;
-  category: string;
-  subcategory: string;
-  date: Date;
-  createdBy: string;
-  createdByName: string;
-  paymentMethod?: string;
-  installmentId?: string;
-  installmentNumber?: number;
-  installmentCount?: number;
-  installmentTotal?: number;
-  recurringId?: string;
-  recurringFrequency?: "monthly" | "weekly";
-  recurringIndex?: number;
-  recurringTotal?: number;
-}
+import { toTransaction } from "@/lib/firebase/converters";
+import type { Transaction } from "@/types/domain";
 
 const MAX_TRANSACTIONS_PER_QUERY = 500;
 
@@ -31,7 +12,7 @@ export async function listTransactions(params: {
   to: Date;
   memberId?: string;
   limit?: number;
-}): Promise<TransactionItem[]> {
+}): Promise<Transaction[]> {
   let q = adminDb()
     .collection("households")
     .doc(params.householdId)
@@ -47,29 +28,8 @@ export async function listTransactions(params: {
     .orderBy("date", "desc")
     .limit(params.limit ?? MAX_TRANSACTIONS_PER_QUERY)
     .get();
-  return snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      type: data.type,
-      amount: data.amount,
-      description: data.description,
-      category: data.category,
-      subcategory: data.subcategory,
-      date: (data.date as Timestamp).toDate(),
-      createdBy: data.createdBy,
-      createdByName: data.createdByName,
-      paymentMethod: data.paymentMethod,
-      installmentId: data.installmentId,
-      installmentNumber: data.installmentNumber,
-      installmentCount: data.installmentCount,
-      installmentTotal: data.installmentTotal,
-      recurringId: data.recurringId,
-      recurringFrequency: data.recurringFrequency,
-      recurringIndex: data.recurringIndex,
-      recurringTotal: data.recurringTotal,
-    };
-  });
+
+  return snap.docs.map(toTransaction);
 }
 
 export function monthRange(year: number, monthIndex: number) {

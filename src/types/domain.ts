@@ -1,44 +1,43 @@
-import type { Timestamp } from "firebase/firestore";
+import type {
+  BudgetCategory,
+  DashboardView,
+  GoalCategory,
+  GoalPriority,
+  GoalStatus,
+  InviteStatus,
+  MemberRole,
+  PaymentMethod,
+  RecurringFrequency,
+  ThemePreference,
+  TransactionCategory,
+  TransactionType,
+} from "./enums";
 
-export type ThemePreference = "dark" | "light" | "system";
-export type DashboardView = "mine" | "partner" | "family";
-
-export type BudgetCategory = "essentials" | "qualityOfLife" | "goals";
-export type TransactionCategory = BudgetCategory | "income" | "transfer";
-export type TransactionType = "income" | "expense" | "transfer";
-export type PaymentMethod = "pix" | "credit" | "debit" | "cash";
-
-export type MemberRole = "owner" | "member";
-
-export type GoalStatus = "active" | "paused" | "completed";
-export type GoalPriority = "high" | "medium" | "low";
-export type GoalCategory =
-  | "emergency"
-  | "travel"
-  | "purchase"
-  | "investment"
-  | "custom";
+/**
+ * Domain types usam Date (não Timestamp). Para o shape cru do Firestore,
+ * veja `src/lib/firebase/converters.ts`.
+ */
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  photoURL?: string;
+  photoURL?: string | null;
   currentHouseholdId: string | null;
   householdIds: string[];
   preferences: {
     theme: ThemePreference;
     defaultView: DashboardView;
   };
-  createdAt: Timestamp;
+  createdAt: Date;
 }
 
 export interface HouseholdMember {
   role: MemberRole;
   name: string;
-  photoURL?: string;
+  photoURL?: string | null;
   monthlyIncome: number;
-  joinedAt: Timestamp;
+  joinedAt: Date;
 }
 
 export interface Household {
@@ -54,7 +53,21 @@ export interface Household {
     goals: number;
   };
   currency: "BRL";
-  createdAt: Timestamp;
+  createdAt: Date;
+}
+
+export interface TransactionInstallment {
+  id: string;
+  number: number;
+  count: number;
+  total: number;
+}
+
+export interface TransactionRecurring {
+  id: string;
+  frequency: RecurringFrequency;
+  index: number;
+  total: number;
 }
 
 export interface Transaction {
@@ -66,18 +79,14 @@ export interface Transaction {
   subcategory: string;
   customSubcategory?: string;
   goalId?: string;
-  date: Timestamp;
+  date: Date;
   paymentMethod?: PaymentMethod;
   createdBy: string;
   createdByName: string;
-  tags?: string[];
-  recurring?: {
-    enabled: boolean;
-    frequency: "monthly" | "weekly";
-    endDate?: Timestamp;
-  };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  installment?: TransactionInstallment;
+  recurring?: TransactionRecurring;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Goal {
@@ -85,15 +94,16 @@ export interface Goal {
   name: string;
   icon: string;
   color: string;
+  category: GoalCategory;
+  priority: GoalPriority;
+  status: GoalStatus;
   targetAmount: number;
   currentAmount: number;
   monthlyContribution: number;
-  startDate: Timestamp;
-  estimatedEndDate: Timestamp;
-  priority: GoalPriority;
-  status: GoalStatus;
-  category: GoalCategory;
+  startDate: Date;
+  estimatedEndDate: Date;
   createdBy: string;
+  createdAt: Date;
 }
 
 export interface Invite {
@@ -102,9 +112,9 @@ export interface Invite {
   invitedBy: string;
   invitedByName: string;
   householdName: string;
-  status: "pending" | "accepted" | "expired";
-  createdAt: Timestamp;
-  expiresAt: Timestamp;
+  status: InviteStatus;
+  createdAt: Date;
+  expiresAt: Date;
   usedBy?: string;
 }
 
@@ -114,5 +124,5 @@ export interface CustomSubcategory {
   name: string;
   icon?: string;
   createdBy: string;
-  createdAt: Timestamp;
+  createdAt: Date;
 }

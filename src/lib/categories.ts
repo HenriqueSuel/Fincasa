@@ -1,4 +1,4 @@
-import type { BudgetCategory } from "@/types/domain";
+import type { BudgetCategory } from "@/types/enums";
 
 export interface CategoryDefinition {
   id: BudgetCategory;

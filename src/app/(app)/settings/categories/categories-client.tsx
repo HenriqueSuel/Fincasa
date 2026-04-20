@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { CategoryDefinition } from "@/lib/categories";
-import type { CustomSubcategoryItem } from "@/lib/subcategories-query";
+import type { CustomSubcategory } from "@/types/domain";
 import {
   addCustomSubcategory,
   deleteCustomSubcategory,
@@ -29,7 +29,7 @@ export function CategoriesClient({
   custom,
 }: {
   categories: CategoryDefinition[];
-  custom: CustomSubcategoryItem[];
+  custom: CustomSubcategory[];
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
@@ -52,7 +52,7 @@ export function CategoriesClient({
     formAction(fd);
   }
 
-  const customByCategory = custom.reduce<Record<CatId, CustomSubcategoryItem[]>>(
+  const customByCategory = custom.reduce<Record<CatId, CustomSubcategory[]>>(
     (acc, s) => {
       (acc[s.category as CatId] ||= []).push(s);
       return acc;
@@ -192,7 +192,7 @@ function DeletableItem({
   item,
   onDeleted,
 }: {
-  item: CustomSubcategoryItem;
+  item: CustomSubcategory;
   onDeleted: () => void;
 }) {
   async function handleConfirm() {

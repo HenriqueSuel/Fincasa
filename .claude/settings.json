@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(bash -c 'shopt -s dotglob nullglob; mv app/* .')",
-      "Bash(pnpm dlx *)"
+      "Bash(pnpm dlx *)",
+      "Bash(pnpm add *)"
     ]
   }
 }

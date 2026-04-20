@@ -39,6 +39,7 @@ export function ViewToggle({
         <Link
           key={v}
           href={buildHref(v)}
+          aria-pressed={current === v}
           className={cn(
             "h-8 flex items-center justify-center rounded-full text-xs font-medium transition-colors",
             current === v

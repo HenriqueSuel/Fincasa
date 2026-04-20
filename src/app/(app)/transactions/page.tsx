@@ -12,6 +12,7 @@ import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
 import { CATEGORIES } from "@/lib/categories";
 import { formatBRL, formatSignedBRL } from "@/lib/money";
+import { toLocalDateKey } from "@/lib/dates";
 import { ViewToggle } from "@/components/transactions/view-toggle";
 import { TransactionsFilters } from "@/components/transactions/transactions-filters";
 
@@ -117,7 +118,7 @@ export default async function TransactionsPage({
 
   const grouped = new Map<string, typeof transactions>();
   for (const t of transactions) {
-    const key = t.date.toISOString().slice(0, 10);
+    const key = toLocalDateKey(t.date);
     const arr = grouped.get(key) ?? [];
     arr.push(t);
     grouped.set(key, arr);
@@ -265,12 +266,12 @@ export default async function TransactionsPage({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
                           {t.description}
-                          {t.installmentCount && t.installmentNumber ? (
+                          {t.installment ? (
                             <span className="ml-2 inline-flex items-center rounded-full bg-muted px-2 text-[10px] font-medium text-muted-foreground align-middle">
-                              {t.installmentNumber}/{t.installmentCount}
+                              {t.installment.number}/{t.installment.count}
                             </span>
                           ) : null}
-                          {t.recurringId ? (
+                          {t.recurring ? (
                             <span
                               className="ml-2 inline-flex items-center rounded-full bg-muted px-2 text-[10px] font-medium text-muted-foreground align-middle"
                               title="Transação recorrente"
