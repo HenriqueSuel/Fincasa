@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { getSession } from "@/lib/firebase/session";
+import { requireSession } from "@/lib/auth/guards";
 import { householdSchema } from "@/lib/validators";
 import { BUDGET_ALLOCATION } from "@/lib/categories";
 
@@ -17,8 +17,10 @@ export async function createHousehold(
   _prev: CreateHouseholdState | undefined,
   formData: FormData,
 ): Promise<CreateHouseholdState> {
-  const session = await getSession();
-  if (!session) redirect("/login");
+  const ctx = await requireSession();
+  if (ctx.user.currentHouseholdId) {
+    redirect("/");
+  }
 
   const parsed = householdSchema.safeParse({
     name: String(formData.get("name") ?? "").trim(),
@@ -34,28 +36,24 @@ export async function createHousehold(
     return { fieldErrors };
   }
 
-  const userRef = adminDb().collection("users").doc(session.uid);
-  const userSnap = await userRef.get();
-  const user = userSnap.data();
-  if (!user) return { error: "Usuário não encontrado." };
-
+  const userRef = adminDb().collection("users").doc(ctx.uid);
   const householdRef = adminDb().collection("households").doc();
   const now = Timestamp.now();
 
   await adminDb().runTransaction(async (tx) => {
     tx.set(householdRef, {
       name: parsed.data.name,
-      createdBy: session.uid,
+      createdBy: ctx.uid,
       members: {
-        [session.uid]: {
+        [ctx.uid]: {
           role: "owner",
-          name: user.name,
-          photoURL: user.photoURL ?? null,
+          name: ctx.user.name,
+          photoURL: ctx.user.photoURL ?? null,
           monthlyIncome: parsed.data.monthlyIncome,
           joinedAt: now,
         },
       },
-      memberIds: [session.uid],
+      memberIds: [ctx.uid],
       combinedMonthlyIncome: parsed.data.monthlyIncome,
       budgetAllocation: BUDGET_ALLOCATION,
       currency: "BRL",

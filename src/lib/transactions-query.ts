@@ -23,11 +23,14 @@ export interface TransactionItem {
   recurringTotal?: number;
 }
 
+const MAX_TRANSACTIONS_PER_QUERY = 500;
+
 export async function listTransactions(params: {
   householdId: string;
   from: Date;
   to: Date;
   memberId?: string;
+  limit?: number;
 }): Promise<TransactionItem[]> {
   let q = adminDb()
     .collection("households")
@@ -40,7 +43,10 @@ export async function listTransactions(params: {
     q = q.where("createdBy", "==", params.memberId);
   }
 
-  const snap = await q.orderBy("date", "desc").get();
+  const snap = await q
+    .orderBy("date", "desc")
+    .limit(params.limit ?? MAX_TRANSACTIONS_PER_QUERY)
+    .get();
   return snap.docs.map((d) => {
     const data = d.data();
     return {

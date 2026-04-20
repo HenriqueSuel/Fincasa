@@ -8,8 +8,7 @@ import {
   Pencil,
   Download,
 } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
 import { CATEGORIES } from "@/lib/categories";
 import { formatBRL, formatSignedBRL } from "@/lib/money";
@@ -69,13 +68,8 @@ export default async function TransactionsPage({
     cat: rawCat,
     q: rawQ,
   } = await searchParams;
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
-  const householdRef = adminDb()
-    .collection("households")
-    .doc(user.currentHouseholdId);
-  const household = (await householdRef.get()).data()!;
+  const ctx = await requireHouseholdContext();
+  const { uid, householdId, partnerId } = ctx;
 
   const now = new Date();
   const year = rawY ? Number(rawY) : now.getFullYear();
@@ -84,18 +78,14 @@ export default async function TransactionsPage({
     rawView === "mine" || rawView === "partner" || rawView === "family"
       ? rawView
       : "family";
-
-  const partnerId = (household.memberIds as string[] | undefined)?.find(
-    (id) => id !== session.uid,
-  );
   if (view === "partner" && !partnerId) redirect("/transactions?view=family");
 
   const memberId =
-    view === "mine" ? session.uid : view === "partner" ? partnerId : undefined;
+    view === "mine" ? uid : view === "partner" ? partnerId : undefined;
 
   const { from, to } = monthRange(year, monthIndex);
   const allTransactions = await listTransactions({
-    householdId: user.currentHouseholdId,
+    householdId,
     from,
     to,
     memberId,
@@ -263,7 +253,7 @@ export default async function TransactionsPage({
                   <li key={t.id}>
                     <Link
                       href={
-                        t.createdBy === session.uid
+                        t.createdBy === uid
                           ? `/transactions/${t.id}`
                           : "/transactions"
                       }
@@ -303,7 +293,7 @@ export default async function TransactionsPage({
                         >
                           {formatSignedBRL(t.amount, t.type)}
                         </p>
-                        {t.createdBy === session.uid ? (
+                        {t.createdBy === uid ? (
                           <Pencil className="size-3 text-muted-foreground ml-auto mt-0.5" />
                         ) : null}
                       </div>

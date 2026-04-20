@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listGoals } from "@/lib/goals-query";
 import { estimateMonthsRemaining } from "@/lib/goals";
 import { formatBRL } from "@/lib/money";
@@ -11,10 +10,8 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Metas" };
 
 export default async function GoalsPage() {
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
-  const goals = await listGoals(user.currentHouseholdId);
+  const { householdId } = await requireHouseholdContext();
+  const goals = await listGoals(householdId);
 
   const active = goals.filter((g) => g.status === "active");
   const paused = goals.filter((g) => g.status === "paused");

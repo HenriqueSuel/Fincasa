@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function householdDoc(hid) {
+      return get(/databases/$(database)/documents/households/$(hid));
+    }
+
+    function isMember(hid) {
+      return isSignedIn() &&
+             request.auth.uid in householdDoc(hid).data.memberIds;
+    }
+
+    function isOwner(hid) {
+      return isMember(hid) &&
+             householdDoc(hid).data.members[request.auth.uid].role == "owner";
+    }
+
+    // ------------------------------------------------------------------
+    // users/{userId} — cada user só lê/escreve o próprio doc
+    // ------------------------------------------------------------------
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ------------------------------------------------------------------
+    // households/{householdId}
+    // ------------------------------------------------------------------
+    match /households/{householdId} {
+      allow read: if isMember(householdId);
+
+      // Criar: qualquer user autenticado, mas tem que se auto-adicionar
+      // como owner dentro do memberIds.
+      allow create: if isSignedIn() &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       request.auth.uid in request.resource.data.memberIds &&
+                       request.resource.data.members[request.auth.uid].role == "owner";
+
+      // Update: apenas membros. Não permitimos mudar createdBy.
+      allow update: if isMember(householdId) &&
+                       request.resource.data.createdBy == resource.data.createdBy;
+
+      // Delete desabilitado: caminho via Server Action.
+      allow delete: if false;
+
+      // --------------------------------------------------------------
+      // Subcoleções: transactions
+      // --------------------------------------------------------------
+      match /transactions/{txId} {
+        allow read: if isMember(householdId);
+
+        // Só quem criou pode editar/apagar o próprio lançamento.
+        allow create: if isMember(householdId) &&
+                         request.resource.data.createdBy == request.auth.uid;
+        allow update, delete: if isMember(householdId) &&
+                                 resource.data.createdBy == request.auth.uid;
+      }
+
+      // --------------------------------------------------------------
+      // Subcoleções: goals
+      // --------------------------------------------------------------
+      match /goals/{goalId} {
+        allow read: if isMember(householdId);
+        // Qualquer membro cria/edita/apaga metas (decisão de produto).
+        allow create, update, delete: if isMember(householdId);
+      }
+
+      // --------------------------------------------------------------
+      // Subcoleções: customSubcategories
+      // --------------------------------------------------------------
+      match /customSubcategories/{subId} {
+        allow read: if isMember(householdId);
+        allow create, update, delete: if isMember(householdId);
+      }
+
+      // --------------------------------------------------------------
+      // Subcoleções: invites — leitura aberta (token é o segredo),
+      // escrita só via Server Action (Admin SDK bypassa essas rules).
+      // --------------------------------------------------------------
+      match /invites/{inviteId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+  }
+}

@@ -1,19 +1,14 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireSession } from "@/lib/auth/guards";
 import { CreateHouseholdForm } from "./create-household-form";
 
 export const metadata: Metadata = { title: "Criar família" };
 
 export default async function CreateHouseholdPage() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data();
-  if (user?.currentHouseholdId) redirect("/");
+  const { user } = await requireSession();
+  if (user.currentHouseholdId) redirect("/");
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-6 py-12">

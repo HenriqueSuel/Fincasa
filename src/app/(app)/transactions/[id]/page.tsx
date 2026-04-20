@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Timestamp } from "firebase-admin/firestore";
-import { getSession } from "@/lib/firebase/session";
 import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listGoals } from "@/lib/goals-query";
 import { listCustomSubcategories } from "@/lib/subcategories-query";
 import { TransactionForm } from "@/components/transactions/transaction-form";
@@ -22,25 +22,23 @@ export default async function EditTransactionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
+  const { uid, householdId } = await requireHouseholdContext();
 
   const ref = adminDb()
     .collection("households")
-    .doc(user.currentHouseholdId)
+    .doc(householdId)
     .collection("transactions")
     .doc(id);
   const snap = await ref.get();
   const tx = snap.data();
   if (!tx) notFound();
-  if (tx.createdBy !== session.uid) redirect("/transactions");
+  if (tx.createdBy !== uid) redirect("/transactions");
 
   const boundUpdate = updateTransaction.bind(null, id);
-  const goals = await listGoals(user.currentHouseholdId, { activeOnly: true });
-  const customSubcategories = await listCustomSubcategories(
-    user.currentHouseholdId,
-  );
+  const [goals, customSubcategories] = await Promise.all([
+    listGoals(householdId, { activeOnly: true }),
+    listCustomSubcategories(householdId),
+  ]);
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-6 py-8 max-w-xl w-full mx-auto">

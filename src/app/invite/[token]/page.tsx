@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/firebase/session";
 import { adminDb } from "@/lib/firebase/admin";

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { getSession } from "@/lib/firebase/session";
+import { requireHouseholdContext, requireSession } from "@/lib/auth/guards";
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
@@ -22,25 +22,8 @@ function genToken() {
 }
 
 export async function createInvite(): Promise<{ token: string; url: string }> {
-  const session = await getSession();
-  if (!session) redirect("/login");
-
-  const userRef = adminDb().collection("users").doc(session.uid);
-  const userSnap = await userRef.get();
-  const user = userSnap.data();
-  if (!user?.currentHouseholdId) {
-    throw new Error("Crie uma família antes de convidar.");
-  }
-
-  const householdRef = adminDb()
-    .collection("households")
-    .doc(user.currentHouseholdId);
-  const householdSnap = await householdRef.get();
-  const household = householdSnap.data();
-  if (!household) throw new Error("Família não encontrada.");
-
-  const member = household.members?.[session.uid];
-  if (member?.role !== "owner") {
+  const ctx = await requireHouseholdContext();
+  if (!ctx.isOwner) {
     throw new Error("Só o dono pode gerar convites.");
   }
 
@@ -48,15 +31,19 @@ export async function createInvite(): Promise<{ token: string; url: string }> {
   const now = Timestamp.now();
   const expiresAt = Timestamp.fromMillis(Date.now() + INVITE_TTL_MS);
 
-  await householdRef.collection("invites").add({
-    token,
-    invitedBy: session.uid,
-    invitedByName: user.name,
-    householdName: household.name,
-    status: "pending",
-    createdAt: now,
-    expiresAt,
-  });
+  await adminDb()
+    .collection("households")
+    .doc(ctx.householdId)
+    .collection("invites")
+    .add({
+      token,
+      invitedBy: ctx.uid,
+      invitedByName: ctx.user.name,
+      householdName: ctx.household.name,
+      status: "pending",
+      createdAt: now,
+      expiresAt,
+    });
 
   revalidatePath("/settings/household");
 
@@ -99,74 +86,94 @@ export async function acceptInvite(
   _prev: AcceptInviteState | undefined,
   formData: FormData,
 ): Promise<AcceptInviteState> {
-  const session = await getSession();
-  if (!session) redirect(`/login?next=/invite/${token}`);
+  const ctx = await requireSession();
+  if (ctx.user.currentHouseholdId) {
+    return {
+      error: "Você já faz parte de uma família — saia antes de aceitar outro convite.",
+    };
+  }
 
   const monthlyIncome = Number(formData.get("monthlyIncome") ?? 0);
   if (!Number.isFinite(monthlyIncome) || monthlyIncome < 0) {
     return { fieldErrors: { monthlyIncome: "Renda inválida" } };
   }
 
-  const query = await adminDb()
+  const db = adminDb();
+
+  const query = await db
     .collectionGroup("invites")
     .where("token", "==", token)
     .limit(1)
     .get();
 
   if (query.empty) return { error: "Convite não encontrado." };
-  const inviteDoc = query.docs[0]!;
-  const invite = inviteDoc.data();
-  const householdRef = inviteDoc.ref.parent.parent;
+  const inviteRef = query.docs[0]!.ref;
+  const householdRef = inviteRef.parent.parent;
   if (!householdRef) return { error: "Convite malformado." };
 
-  if (invite.status !== "pending") {
-    return { error: "Este convite já foi usado ou expirou." };
-  }
-  if ((invite.expiresAt as Timestamp).toMillis() < Date.now()) {
-    await inviteDoc.ref.update({ status: "expired" });
-    return { error: "Este convite expirou." };
-  }
-
-  const userRef = adminDb().collection("users").doc(session.uid);
-  const userSnap = await userRef.get();
-  const user = userSnap.data();
-  if (!user) return { error: "Usuário não encontrado." };
-
-  const householdSnap = await householdRef.get();
-  const household = householdSnap.data();
-  if (!household) return { error: "Família não encontrada." };
-
-  if (household.memberIds?.includes(session.uid)) {
-    return { error: "Você já faz parte dessa família." };
-  }
-
+  const userRef = db.collection("users").doc(ctx.uid);
   const now = Timestamp.now();
-  const newCombined =
-    (household.combinedMonthlyIncome ?? 0) + monthlyIncome;
+  const householdIdRef = householdRef;
 
-  await adminDb().runTransaction(async (tx) => {
-    tx.update(householdRef, {
-      [`members.${session.uid}`]: {
-        role: "member",
-        name: user.name,
-        photoURL: user.photoURL ?? null,
-        monthlyIncome,
-        joinedAt: now,
-      },
-      memberIds: FieldValue.arrayUnion(session.uid),
-      combinedMonthlyIncome: newCombined,
-    });
+  try {
+    await db.runTransaction(async (tx) => {
+      const [inviteSnap, householdSnap, userSnap] = await Promise.all([
+        tx.get(inviteRef),
+        tx.get(householdIdRef),
+        tx.get(userRef),
+      ]);
 
-    tx.update(userRef, {
-      currentHouseholdId: householdRef.id,
-      householdIds: FieldValue.arrayUnion(householdRef.id),
-    });
+      const invite = inviteSnap.data();
+      const household = householdSnap.data();
+      const user = userSnap.data();
 
-    tx.update(inviteDoc.ref, {
-      status: "accepted",
-      usedBy: session.uid,
+      if (!invite) throw new Error("Convite não encontrado.");
+      if (!household) throw new Error("Família não encontrada.");
+      if (!user) throw new Error("Usuário não encontrado.");
+
+      if (invite.status !== "pending") {
+        throw new Error("Este convite já foi usado ou expirou.");
+      }
+      if ((invite.expiresAt as Timestamp).toMillis() < Date.now()) {
+        tx.update(inviteRef, { status: "expired" });
+        throw new Error("Este convite expirou.");
+      }
+
+      const memberIds = (household.memberIds as string[] | undefined) ?? [];
+      if (memberIds.includes(ctx.uid)) {
+        throw new Error("Você já faz parte dessa família.");
+      }
+
+      const newCombined =
+        (household.combinedMonthlyIncome ?? 0) + monthlyIncome;
+
+      tx.update(householdIdRef, {
+        [`members.${ctx.uid}`]: {
+          role: "member",
+          name: user.name,
+          photoURL: user.photoURL ?? null,
+          monthlyIncome,
+          joinedAt: now,
+        },
+        memberIds: FieldValue.arrayUnion(ctx.uid),
+        combinedMonthlyIncome: newCombined,
+      });
+
+      tx.update(userRef, {
+        currentHouseholdId: householdIdRef.id,
+        householdIds: FieldValue.arrayUnion(householdIdRef.id),
+      });
+
+      tx.update(inviteRef, {
+        status: "accepted",
+        usedBy: ctx.uid,
+      });
     });
-  });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Não foi possível aceitar o convite.",
+    };
+  }
 
   revalidatePath("/", "layout");
   redirect("/?toast=invite-accepted");

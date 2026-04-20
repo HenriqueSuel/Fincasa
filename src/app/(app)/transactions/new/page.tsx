@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listGoals } from "@/lib/goals-query";
 import { listCustomSubcategories } from "@/lib/subcategories-query";
 import { TransactionForm } from "@/components/transactions/transaction-form";
@@ -16,13 +15,11 @@ export default async function NewTransactionPage({
   searchParams: Promise<{ goalId?: string }>;
 }) {
   const { goalId } = await searchParams;
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
-  const goals = await listGoals(user.currentHouseholdId, { activeOnly: true });
-  const customSubcategories = await listCustomSubcategories(
-    user.currentHouseholdId,
-  );
+  const { householdId } = await requireHouseholdContext();
+  const [goals, customSubcategories] = await Promise.all([
+    listGoals(householdId, { activeOnly: true }),
+    listCustomSubcategories(householdId),
+  ]);
 
   const preselectedGoal = goalId
     ? goals.find((g) => g.id === goalId)

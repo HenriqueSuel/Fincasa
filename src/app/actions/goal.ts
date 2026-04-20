@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { getSession } from "@/lib/firebase/session";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { GOAL_CATEGORIES, GOAL_PRIORITIES } from "@/lib/goals";
 
 export interface GoalFormState {
@@ -27,12 +27,12 @@ const CATEGORY_IDS = GOAL_CATEGORIES.map((c) => c.id) as readonly string[];
 const PRIORITY_IDS = GOAL_PRIORITIES.map((p) => p.id) as readonly string[];
 
 async function currentHousehold() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data();
-  if (!user?.currentHouseholdId) redirect("/onboarding");
-  return { session, user, householdId: user.currentHouseholdId as string };
+  const ctx = await requireHouseholdContext();
+  return {
+    session: { uid: ctx.uid },
+    user: ctx.user,
+    householdId: ctx.householdId,
+  };
 }
 
 function parse(formData: FormData) {

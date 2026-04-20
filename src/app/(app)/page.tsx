@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Settings, UserPlus, Target } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { BUDGET_ALLOCATION, CATEGORIES } from "@/lib/categories";
 import { formatBRL } from "@/lib/money";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
@@ -18,17 +17,10 @@ export default async function Dashboard({
   searchParams: Promise<{ view?: string }>;
 }) {
   const { view: rawView } = await searchParams;
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
+  const ctx = await requireHouseholdContext();
+  const { uid, user, household, householdId, partnerId } = ctx;
 
-  const householdRef = adminDb()
-    .collection("households")
-    .doc(user.currentHouseholdId);
-  const household = (await householdRef.get()).data()!;
-
-  const memberIds = (household.memberIds as string[] | undefined) ?? [];
-  const partnerId = memberIds.find((id) => id !== session.uid);
+  const memberIds = household.memberIds ?? [];
   const view: ViewParam =
     rawView === "mine" ||
     (rawView === "partner" && partnerId) ||
@@ -39,16 +31,16 @@ export default async function Dashboard({
   const now = new Date();
   const { from, to } = monthRange(now.getFullYear(), now.getMonth());
   const memberFilter =
-    view === "mine" ? session.uid : view === "partner" ? partnerId : undefined;
+    view === "mine" ? uid : view === "partner" ? partnerId : undefined;
 
   const transactions = await listTransactions({
-    householdId: user.currentHouseholdId,
+    householdId,
     from,
     to,
     memberId: memberFilter,
   });
 
-  const goals = await listGoals(user.currentHouseholdId, { activeOnly: true });
+  const goals = await listGoals(householdId, { activeOnly: true });
 
   const income = transactions
     .filter((t) => t.type === "income")
@@ -65,7 +57,7 @@ export default async function Dashboard({
 
   const baseIncome =
     view === "mine"
-      ? household.members?.[session.uid]?.monthlyIncome ?? 0
+      ? household.members?.[uid]?.monthlyIncome ?? 0
       : view === "partner"
         ? household.members?.[partnerId ?? ""]?.monthlyIncome ?? 0
         : household.combinedMonthlyIncome ?? 0;

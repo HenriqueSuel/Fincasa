@@ -1,16 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireSession } from "@/lib/auth/guards";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
 export default async function OnboardingPage() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data();
-  if (user?.currentHouseholdId) redirect("/");
+  const { user } = await requireSession();
+  if (user.currentHouseholdId) redirect("/");
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-6 py-12">
@@ -20,7 +15,7 @@ export default async function OnboardingPage() {
         </div>
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Bem-vindo, {user?.name}
+            Bem-vindo, {user.name}
           </h1>
           <p className="text-sm text-muted-foreground">
             Pra começar, crie sua família ou aceite um convite.

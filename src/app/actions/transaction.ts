@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { addMonths } from "date-fns";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { getSession } from "@/lib/firebase/session";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 
 export interface TransactionFormState {
   error?: string;
@@ -40,12 +40,12 @@ type Category = (typeof ALLOWED_CATEGORIES)[number];
 const ALLOWED_PAYMENT = ["pix", "credit", "debit", "cash"] as const;
 
 async function currentHousehold() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data();
-  if (!user?.currentHouseholdId) redirect("/onboarding");
-  return { session, user, householdId: user.currentHouseholdId as string };
+  const ctx = await requireHouseholdContext();
+  return {
+    session: { uid: ctx.uid },
+    user: ctx.user,
+    householdId: ctx.householdId,
+  };
 }
 
 interface ParsedValues {

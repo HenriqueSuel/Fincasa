@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { format } from "date-fns";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { getHouseholdContextOrNull } from "@/lib/auth/guards";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
 import { rowsToCsv } from "@/lib/csv";
 import { CATEGORIES } from "@/lib/categories";
@@ -28,15 +27,9 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session) {
+  const ctx = await getHouseholdContextOrNull();
+  if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data();
-  if (!user?.currentHouseholdId) {
-    return NextResponse.json({ error: "No household" }, { status: 400 });
   }
 
   const sp = request.nextUrl.searchParams;
@@ -45,23 +38,16 @@ export async function GET(request: NextRequest) {
   const monthIndex = Number(sp.get("m") ?? now.getMonth());
   const view = sp.get("view") ?? "family";
 
-  const householdRef = adminDb()
-    .collection("households")
-    .doc(user.currentHouseholdId);
-  const household = (await householdRef.get()).data();
-  const partnerId = (household?.memberIds as string[] | undefined)?.find(
-    (id) => id !== session.uid,
-  );
   const memberId =
     view === "mine"
-      ? session.uid
-      : view === "partner" && partnerId
-        ? partnerId
+      ? ctx.uid
+      : view === "partner" && ctx.partnerId
+        ? ctx.partnerId
         : undefined;
 
   const { from, to } = monthRange(year, monthIndex);
   const txs = await listTransactions({
-    householdId: user.currentHouseholdId,
+    householdId: ctx.householdId,
     from,
     to,
     memberId,

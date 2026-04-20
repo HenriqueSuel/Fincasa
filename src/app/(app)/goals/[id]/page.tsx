@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
 import { Timestamp } from "firebase-admin/firestore";
-import { getSession } from "@/lib/firebase/session";
 import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { getGoal } from "@/lib/goals-query";
 import { estimateMonthsRemaining } from "@/lib/goals";
 import { formatBRL } from "@/lib/money";
@@ -26,15 +26,13 @@ export default async function GoalDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
-  const goal = await getGoal(user.currentHouseholdId, id);
+  const { householdId } = await requireHouseholdContext();
+  const goal = await getGoal(householdId, id);
   if (!goal) notFound();
 
   const contributionsSnap = await adminDb()
     .collection("households")
-    .doc(user.currentHouseholdId)
+    .doc(householdId)
     .collection("transactions")
     .where("goalId", "==", id)
     .orderBy("date", "desc")

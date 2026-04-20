@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listCustomSubcategories } from "@/lib/subcategories-query";
 import { CATEGORIES } from "@/lib/categories";
 import { CategoriesClient } from "./categories-client";
@@ -10,10 +9,8 @@ import { CategoriesClient } from "./categories-client";
 export const metadata: Metadata = { title: "Categorias" };
 
 export default async function CategoriesSettingsPage() {
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
-  const custom = await listCustomSubcategories(user.currentHouseholdId);
+  const { householdId } = await requireHouseholdContext();
+  const custom = await listCustomSubcategories(householdId);
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-6 py-8 pb-24 max-w-2xl w-full mx-auto">

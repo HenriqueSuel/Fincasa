@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Timestamp } from "firebase-admin/firestore";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
 import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { InviteSection } from "./invite-section";
 
 export const metadata: Metadata = { title: "Família" };
@@ -14,18 +14,9 @@ const BRL = new Intl.NumberFormat("pt-BR", {
 });
 
 export default async function HouseholdSettingsPage() {
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
+  const { household, householdId, isOwner } = await requireHouseholdContext();
 
-  const householdRef = adminDb()
-    .collection("households")
-    .doc(user.currentHouseholdId);
-  const householdSnap = await householdRef.get();
-  const household = householdSnap.data()!;
-
-  const isOwner = household.members?.[session.uid]?.role === "owner";
-
+  const householdRef = adminDb().collection("households").doc(householdId);
   const pendingInvitesSnap = await householdRef
     .collection("invites")
     .where("status", "==", "pending")

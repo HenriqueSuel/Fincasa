@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download } from "lucide-react";
-import { getSession } from "@/lib/firebase/session";
-import { adminDb } from "@/lib/firebase/admin";
+import { requireHouseholdContext } from "@/lib/auth/guards";
 import { formatBRL } from "@/lib/money";
 import {
   categoryBreakdown,
@@ -30,28 +29,23 @@ export default async function ReportsPage({
   searchParams: Promise<{ y?: string; m?: string }>;
 }) {
   const { y: rawY, m: rawM } = await searchParams;
-  const session = (await getSession())!;
-  const userSnap = await adminDb().collection("users").doc(session.uid).get();
-  const user = userSnap.data()!;
-  const householdRef = adminDb()
-    .collection("households")
-    .doc(user.currentHouseholdId);
-  const household = (await householdRef.get()).data()!;
+  const { householdId, household } = await requireHouseholdContext();
 
   const now = new Date();
   const year = rawY ? Number(rawY) : now.getFullYear();
   const monthIndex = rawM ? Number(rawM) : now.getMonth();
 
   const baseIncome = household.combinedMonthlyIncome ?? 0;
-  const members = Object.entries(
-    household.members as Record<string, { name: string }>,
-  ).map(([id, m]) => ({ id, name: m.name }));
+  const members = Object.entries(household.members ?? {}).map(([id, m]) => ({
+    id,
+    name: m.name,
+  }));
 
   const [byCategory, byMember, trend, topSubcategories] = await Promise.all([
-    categoryBreakdown(user.currentHouseholdId, year, monthIndex, baseIncome),
-    memberBreakdown(user.currentHouseholdId, year, monthIndex, members),
-    monthlyTrend(user.currentHouseholdId, year, monthIndex, 6),
-    subcategoryBreakdown(user.currentHouseholdId, year, monthIndex, 5),
+    categoryBreakdown(householdId, year, monthIndex, baseIncome),
+    memberBreakdown(householdId, year, monthIndex, members),
+    monthlyTrend(householdId, year, monthIndex, 6),
+    subcategoryBreakdown(householdId, year, monthIndex, 5),
   ]);
 
   const totalIncome = byMember.reduce((s, m) => s + m.income, 0);
