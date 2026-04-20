@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/firebase/session";
 import { adminDb } from "@/lib/firebase/admin";
+import { BottomNav } from "@/components/layout/bottom-nav";
+import { ToastFromQuery } from "@/components/toast-from-query";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -14,5 +16,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/onboarding");
   }
 
-  return <div className="flex min-h-dvh flex-col">{children}</div>;
+  return (
+    <div className="flex min-h-dvh flex-col">
+      {children}
+      <BottomNav />
+      <Suspense fallback={null}>
+        <ToastFromQuery />
+      </Suspense>
+    </div>
+  );
 }
