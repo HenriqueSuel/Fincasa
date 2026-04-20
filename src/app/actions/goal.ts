@@ -6,112 +6,57 @@ import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { parseLocalDate } from "@/lib/dates";
-import { GOAL_CATEGORIES, GOAL_PRIORITIES } from "@/lib/goals";
+import { GOAL_CATEGORIES } from "@/lib/goals";
+import type { ActionState } from "@/lib/action-state";
+import { applyFieldErrors } from "@/lib/action-state";
+import { goalSchema, type GoalInput } from "@/lib/validators";
 
-export interface GoalFormState {
-  error?: string;
-  fieldErrors?: Partial<
-    Record<
-      | "name"
-      | "targetAmount"
-      | "monthlyContribution"
-      | "startDate"
-      | "estimatedEndDate"
-      | "category"
-      | "priority",
-      string
-    >
-  >;
-}
+export type GoalFormState = ActionState<keyof GoalInput>;
 
-const CATEGORY_IDS = GOAL_CATEGORIES.map((c) => c.id) as readonly string[];
-const PRIORITY_IDS = GOAL_PRIORITIES.map((p) => p.id) as readonly string[];
-
-async function currentHousehold() {
-  const ctx = await requireHouseholdContext();
-  return {
-    session: { uid: ctx.uid },
-    user: ctx.user,
-    householdId: ctx.householdId,
-  };
-}
-
-function parse(formData: FormData) {
-  const errors: GoalFormState["fieldErrors"] = {};
-
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) errors.name = "Nome obrigatório";
-
-  const targetAmount = Number(formData.get("targetAmount") ?? 0);
-  if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
-    errors.targetAmount = "Meta deve ser positiva";
-  }
-
-  const monthlyContribution = Number(formData.get("monthlyContribution") ?? 0);
-  if (!Number.isFinite(monthlyContribution) || monthlyContribution < 0) {
-    errors.monthlyContribution = "Valor inválido";
-  }
-
-  const startDate = parseLocalDate(String(formData.get("startDate") ?? ""));
-  const estimatedEndDate = parseLocalDate(
-    String(formData.get("estimatedEndDate") ?? ""),
-  );
-  if (!startDate) errors.startDate = "Data inicial inválida";
-  if (!estimatedEndDate) errors.estimatedEndDate = "Data final inválida";
-  if (startDate && estimatedEndDate && estimatedEndDate <= startDate) {
-    errors.estimatedEndDate = "Data final deve ser depois da inicial";
-  }
-
-  const category = String(formData.get("category") ?? "custom");
-  if (!CATEGORY_IDS.includes(category)) errors.category = "Categoria inválida";
-
-  const priority = String(formData.get("priority") ?? "medium");
-  if (!PRIORITY_IDS.includes(priority)) errors.priority = "Prioridade inválida";
-
-  const hasErrors = Object.keys(errors).length > 0;
-  return {
-    values: hasErrors
-      ? null
-      : {
-          name,
-          targetAmount,
-          monthlyContribution,
-          startDate: startDate!,
-          estimatedEndDate: estimatedEndDate!,
-          category,
-          priority,
-        },
-    errors: hasErrors ? errors : undefined,
-  };
+function parseFormData(formData: FormData) {
+  return goalSchema.safeParse({
+    name: String(formData.get("name") ?? ""),
+    category: String(formData.get("category") ?? ""),
+    priority: String(formData.get("priority") ?? ""),
+    targetAmount: formData.get("targetAmount"),
+    monthlyContribution: formData.get("monthlyContribution"),
+    startDate:
+      parseLocalDate(String(formData.get("startDate") ?? "")) ?? undefined,
+    estimatedEndDate:
+      parseLocalDate(String(formData.get("estimatedEndDate") ?? "")) ??
+      undefined,
+  });
 }
 
 export async function createGoal(
   _prev: GoalFormState | undefined,
   formData: FormData,
 ): Promise<GoalFormState> {
-  const { session, householdId } = await currentHousehold();
-  const { values, errors } = parse(formData);
-  if (!values) return { fieldErrors: errors };
-
-  const def = GOAL_CATEGORIES.find((c) => c.id === values.category)!;
+  const { uid, householdId } = await requireHouseholdContext();
+  const parsed = parseFormData(formData);
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+  }
+  const { data } = parsed;
+  const def = GOAL_CATEGORIES.find((c) => c.id === data.category)!;
 
   await adminDb()
     .collection("households")
     .doc(householdId)
     .collection("goals")
     .add({
-      name: values.name,
+      name: data.name,
       icon: def.icon,
       color: def.color,
-      category: values.category,
-      priority: values.priority,
+      category: data.category,
+      priority: data.priority,
       status: "active",
-      targetAmount: values.targetAmount,
+      targetAmount: data.targetAmount,
       currentAmount: 0,
-      monthlyContribution: values.monthlyContribution,
-      startDate: Timestamp.fromDate(values.startDate),
-      estimatedEndDate: Timestamp.fromDate(values.estimatedEndDate),
-      createdBy: session.uid,
+      monthlyContribution: data.monthlyContribution,
+      startDate: Timestamp.fromDate(data.startDate),
+      estimatedEndDate: Timestamp.fromDate(data.estimatedEndDate),
+      createdBy: uid,
       createdAt: Timestamp.now(),
     });
 
@@ -125,11 +70,13 @@ export async function updateGoal(
   _prev: GoalFormState | undefined,
   formData: FormData,
 ): Promise<GoalFormState> {
-  const { householdId } = await currentHousehold();
-  const { values, errors } = parse(formData);
-  if (!values) return { fieldErrors: errors };
-
-  const def = GOAL_CATEGORIES.find((c) => c.id === values.category)!;
+  const { householdId } = await requireHouseholdContext();
+  const parsed = parseFormData(formData);
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+  }
+  const { data } = parsed;
+  const def = GOAL_CATEGORIES.find((c) => c.id === data.category)!;
 
   const ref = adminDb()
     .collection("households")
@@ -140,15 +87,15 @@ export async function updateGoal(
   if (!snap.exists) return { error: "Meta não encontrada." };
 
   await ref.update({
-    name: values.name,
+    name: data.name,
     icon: def.icon,
     color: def.color,
-    category: values.category,
-    priority: values.priority,
-    targetAmount: values.targetAmount,
-    monthlyContribution: values.monthlyContribution,
-    startDate: Timestamp.fromDate(values.startDate),
-    estimatedEndDate: Timestamp.fromDate(values.estimatedEndDate),
+    category: data.category,
+    priority: data.priority,
+    targetAmount: data.targetAmount,
+    monthlyContribution: data.monthlyContribution,
+    startDate: Timestamp.fromDate(data.startDate),
+    estimatedEndDate: Timestamp.fromDate(data.estimatedEndDate),
   });
 
   revalidatePath("/goals");
@@ -158,25 +105,28 @@ export async function updateGoal(
 }
 
 export async function deleteGoal(id: string) {
-  const { householdId } = await currentHousehold();
-  const ref = adminDb()
+  const { householdId } = await requireHouseholdContext();
+  await adminDb()
     .collection("households")
     .doc(householdId)
     .collection("goals")
-    .doc(id);
-  await ref.delete();
+    .doc(id)
+    .delete();
   revalidatePath("/goals");
   revalidatePath("/");
 }
 
-export async function toggleGoalStatus(id: string, next: "active" | "paused" | "completed") {
-  const { householdId } = await currentHousehold();
-  const ref = adminDb()
+export async function toggleGoalStatus(
+  id: string,
+  next: "active" | "paused" | "completed",
+) {
+  const { householdId } = await requireHouseholdContext();
+  await adminDb()
     .collection("households")
     .doc(householdId)
     .collection("goals")
-    .doc(id);
-  await ref.update({ status: next });
+    .doc(id)
+    .update({ status: next });
   revalidatePath("/goals");
   revalidatePath(`/goals/${id}`);
   revalidatePath("/");

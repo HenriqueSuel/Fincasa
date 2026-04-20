@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext, requireSession } from "@/lib/auth/guards";
+import { getBaseUrl } from "@/lib/base-url";
+import type { ActionState } from "@/lib/action-state";
+import { applyFieldErrors } from "@/lib/action-state";
+import { acceptInviteSchema } from "@/lib/validators";
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
@@ -47,7 +51,7 @@ export async function createInvite(): Promise<{ token: string; url: string }> {
 
   revalidatePath("/settings/household");
 
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const base = await getBaseUrl();
   return { token, url: `${base}/invite/${token}` };
 }
 
@@ -76,10 +80,7 @@ export async function getInviteByToken(
   };
 }
 
-export interface AcceptInviteState {
-  error?: string;
-  fieldErrors?: Partial<Record<"monthlyIncome", string>>;
-}
+export type AcceptInviteState = ActionState<"monthlyIncome">;
 
 export async function acceptInvite(
   token: string,
@@ -89,14 +90,18 @@ export async function acceptInvite(
   const ctx = await requireSession();
   if (ctx.user.currentHouseholdId) {
     return {
-      error: "Você já faz parte de uma família — saia antes de aceitar outro convite.",
+      error:
+        "Você já faz parte de uma família — saia antes de aceitar outro convite.",
     };
   }
 
-  const monthlyIncome = Number(formData.get("monthlyIncome") ?? 0);
-  if (!Number.isFinite(monthlyIncome) || monthlyIncome < 0) {
-    return { fieldErrors: { monthlyIncome: "Renda inválida" } };
+  const parsed = acceptInviteSchema.safeParse({
+    monthlyIncome: formData.get("monthlyIncome"),
+  });
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
   }
+  const monthlyIncome = parsed.data.monthlyIncome;
 
   const db = adminDb();
 

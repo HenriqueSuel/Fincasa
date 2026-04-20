@@ -42,6 +42,9 @@ export function CategoriesClient({
   useEffect(() => {
     if (state.success) {
       toast.success("Subcategoria criada.");
+      // Incrementa a key pra forçar remount do form (reset via key).
+      // Side effect legítimo de uma transição de estado do useActionState.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLastSubmitKey((k) => k + 1);
     } else if (state.error) {
       toast.error(state.error);

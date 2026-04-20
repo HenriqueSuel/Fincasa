@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { ArrowLeft } from "lucide-react";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
+import { getBaseUrl } from "@/lib/base-url";
 import { EditIncomeDialog } from "./edit-income-dialog";
 import { InviteSection } from "./invite-section";
 
@@ -24,12 +25,15 @@ export default async function HouseholdSettingsPage() {
     .where("status", "==", "pending")
     .get();
 
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const base = await getBaseUrl();
+  // Server component: Date.now() é avaliado uma vez por request.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
   const pendingInvites = pendingInvitesSnap.docs
     .map((d) => {
       const data = d.data();
       const expiresAt = (data.expiresAt as Timestamp).toMillis();
-      if (expiresAt < Date.now()) return null;
+      if (expiresAt < nowMs) return null;
       return {
         id: d.id,
         token: data.token as string,
@@ -101,7 +105,7 @@ export default async function HouseholdSettingsPage() {
       </section>
 
       {isOwner ? (
-        <InviteSection pendingInvites={pendingInvites} />
+        <InviteSection pendingInvites={pendingInvites} nowMs={nowMs} />
       ) : (
         <p className="text-sm text-muted-foreground">
           Só o dono da família pode gerar convites.

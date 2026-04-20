@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createInvite } from "@/app/actions/invite";
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
 interface PendingInvite {
   id: string;
   token: string;
@@ -14,11 +16,16 @@ interface PendingInvite {
   expiresAt: number;
 }
 
-export function InviteSection({
-  pendingInvites,
-}: {
+interface Props {
   pendingInvites: PendingInvite[];
-}) {
+  /**
+   * Passado pelo page.tsx (server component). `Date.now()` não é chamado
+   * em render pra não quebrar a pureza — capturamos uma vez no server.
+   */
+  nowMs: number;
+}
+
+export function InviteSection({ pendingInvites, nowMs }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [justCreated, setJustCreated] = useState<string | null>(null);
@@ -37,12 +44,11 @@ export function InviteSection({
           .then(() => true)
           .catch(() => false);
         setCopiedToken(token);
-        toast.success(
-          copied ? "Link gerado e copiado." : "Link gerado.",
-        );
+        toast.success(copied ? "Link gerado e copiado." : "Link gerado.");
         router.refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Erro ao gerar convite.";
+        const msg =
+          err instanceof Error ? err.message : "Erro ao gerar convite.";
         setError(msg);
         toast.error(msg);
       }
@@ -91,7 +97,7 @@ export function InviteSection({
           {pendingInvites.map((inv) => {
             const daysLeft = Math.max(
               0,
-              Math.floor((inv.expiresAt - Date.now()) / (1000 * 60 * 60 * 24)),
+              Math.floor((inv.expiresAt - nowMs) / MS_PER_DAY),
             );
             return (
               <li

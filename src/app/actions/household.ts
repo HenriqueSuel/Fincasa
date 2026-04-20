@@ -5,42 +5,35 @@ import { redirect } from "next/navigation";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext, requireSession } from "@/lib/auth/guards";
+import type { ActionState } from "@/lib/action-state";
+import { applyFieldErrors } from "@/lib/action-state";
 import { householdSchema, updateMyIncomeSchema } from "@/lib/validators";
 import { BUDGET_ALLOCATION } from "@/lib/categories";
 
-export interface CreateHouseholdState {
-  error?: string;
-  fieldErrors?: Partial<Record<"name" | "monthlyIncome", string>>;
-}
+export type CreateHouseholdState = ActionState<"name" | "monthlyIncome">;
+export type UpdateMyIncomeState = ActionState<"monthlyIncome">;
 
 export async function createHousehold(
   _prev: CreateHouseholdState | undefined,
   formData: FormData,
 ): Promise<CreateHouseholdState> {
   const ctx = await requireSession();
-  if (ctx.user.currentHouseholdId) {
-    redirect("/");
-  }
+  if (ctx.user.currentHouseholdId) redirect("/");
 
   const parsed = householdSchema.safeParse({
-    name: String(formData.get("name") ?? "").trim(),
-    monthlyIncome: Number(formData.get("monthlyIncome") ?? 0),
+    name: String(formData.get("name") ?? ""),
+    monthlyIncome: formData.get("monthlyIncome"),
   });
-
   if (!parsed.success) {
-    const fieldErrors: CreateHouseholdState["fieldErrors"] = {};
-    for (const issue of parsed.error.issues) {
-      const key = issue.path[0] as "name" | "monthlyIncome";
-      if (!fieldErrors[key]) fieldErrors[key] = issue.message;
-    }
-    return { fieldErrors };
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
   }
 
-  const userRef = adminDb().collection("users").doc(ctx.uid);
-  const householdRef = adminDb().collection("households").doc();
+  const db = adminDb();
+  const userRef = db.collection("users").doc(ctx.uid);
+  const householdRef = db.collection("households").doc();
   const now = Timestamp.now();
 
-  await adminDb().runTransaction(async (tx) => {
+  await db.runTransaction(async (tx) => {
     tx.set(householdRef, {
       name: parsed.data.name,
       createdBy: ctx.uid,
@@ -70,12 +63,6 @@ export async function createHousehold(
   redirect("/?toast=household-created");
 }
 
-export interface UpdateMyIncomeState {
-  success?: boolean;
-  error?: string;
-  fieldErrors?: Partial<Record<"monthlyIncome", string>>;
-}
-
 export async function updateMyIncome(
   _prev: UpdateMyIncomeState | undefined,
   formData: FormData,
@@ -83,44 +70,46 @@ export async function updateMyIncome(
   const ctx = await requireHouseholdContext();
 
   const parsed = updateMyIncomeSchema.safeParse({
-    monthlyIncome: Number(formData.get("monthlyIncome") ?? 0),
+    monthlyIncome: formData.get("monthlyIncome"),
   });
-
   if (!parsed.success) {
-    const fieldErrors: UpdateMyIncomeState["fieldErrors"] = {};
-    for (const issue of parsed.error.issues) {
-      const key = issue.path[0] as "monthlyIncome";
-      if (!fieldErrors[key]) fieldErrors[key] = issue.message;
-    }
-    return { fieldErrors };
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
   }
 
   const db = adminDb();
   const householdRef = db.collection("households").doc(ctx.householdId);
 
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(householdRef);
-    const data = snap.data();
-    if (!data) throw new Error("Família não encontrada.");
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(householdRef);
+      const data = snap.data();
+      if (!data) throw new Error("Família não encontrada.");
 
-    const members = (data.members ?? {}) as Record<
-      string,
-      { monthlyIncome?: number }
-    >;
-    if (!members[ctx.uid]) {
-      throw new Error("Você não faz parte dessa família.");
-    }
+      const members = (data.members ?? {}) as Record<
+        string,
+        { monthlyIncome?: number }
+      >;
+      if (!members[ctx.uid]) {
+        throw new Error("Você não faz parte dessa família.");
+      }
 
-    const combined = Object.entries(members).reduce((sum, [uid, m]) => {
-      const value = uid === ctx.uid ? parsed.data.monthlyIncome : (m.monthlyIncome ?? 0);
-      return sum + value;
-    }, 0);
+      const combined = Object.entries(members).reduce((sum, [uid, m]) => {
+        const value =
+          uid === ctx.uid ? parsed.data.monthlyIncome : (m.monthlyIncome ?? 0);
+        return sum + value;
+      }, 0);
 
-    tx.update(householdRef, {
-      [`members.${ctx.uid}.monthlyIncome`]: parsed.data.monthlyIncome,
-      combinedMonthlyIncome: combined,
+      tx.update(householdRef, {
+        [`members.${ctx.uid}.monthlyIncome`]: parsed.data.monthlyIncome,
+        combinedMonthlyIncome: combined,
+      });
     });
-  });
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error ? err.message : "Não foi possível atualizar.",
+    };
+  }
 
   revalidatePath("/");
   revalidatePath("/settings/household");

@@ -8,23 +8,18 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { parseLocalDate } from "@/lib/dates";
+import type { ActionState } from "@/lib/action-state";
 
-export interface TransactionFormState {
-  error?: string;
-  fieldErrors?: Partial<
-    Record<
-      | "amount"
-      | "description"
-      | "category"
-      | "subcategory"
-      | "date"
-      | "goalId"
-      | "installments"
-      | "recurring",
-      string
-    >
-  >;
-}
+export type TransactionFormState = ActionState<
+  | "amount"
+  | "description"
+  | "category"
+  | "subcategory"
+  | "date"
+  | "goalId"
+  | "installments"
+  | "recurring"
+>;
 
 const MAX_INSTALLMENTS = 24;
 const RECURRING_MONTHS_AHEAD = 12;
@@ -39,15 +34,6 @@ const ALLOWED_CATEGORIES = [
 type Category = (typeof ALLOWED_CATEGORIES)[number];
 
 const ALLOWED_PAYMENT = ["pix", "credit", "debit", "cash"] as const;
-
-async function currentHousehold() {
-  const ctx = await requireHouseholdContext();
-  return {
-    session: { uid: ctx.uid },
-    user: ctx.user,
-    householdId: ctx.householdId,
-  };
-}
 
 interface ParsedValues {
   type: "income" | "expense" | "transfer";
@@ -147,7 +133,7 @@ export async function createTransaction(
   _prev: TransactionFormState | undefined,
   formData: FormData,
 ): Promise<TransactionFormState> {
-  const { session, user, householdId } = await currentHousehold();
+  const { uid, user, householdId } = await requireHouseholdContext();
   const { values, errors } = parseFormData(formData);
   if (errors) return { fieldErrors: errors };
 
@@ -182,7 +168,7 @@ export async function createTransaction(
         recurringFrequency: "monthly",
         recurringIndex: i,
         recurringTotal: RECURRING_MONTHS_AHEAD,
-        createdBy: session.uid,
+        createdBy: uid,
         createdByName: user.name,
         createdAt: now,
         updatedAt: now,
@@ -222,7 +208,7 @@ export async function createTransaction(
         installmentNumber: i + 1,
         installmentCount: values.installments,
         installmentTotal: values.amount,
-        createdBy: session.uid,
+        createdBy: uid,
         createdByName: user.name,
         createdAt: now,
         updatedAt: now,
@@ -251,7 +237,7 @@ export async function createTransaction(
       ...(values.goalId ? { goalId: values.goalId } : {}),
       date: Timestamp.fromDate(values.date),
       ...(values.paymentMethod ? { paymentMethod: values.paymentMethod } : {}),
-      createdBy: session.uid,
+      createdBy: uid,
       createdByName: user.name,
       createdAt: now,
       updatedAt: now,
@@ -283,7 +269,7 @@ export async function updateTransaction(
   _prev: TransactionFormState | undefined,
   formData: FormData,
 ): Promise<TransactionFormState> {
-  const { session, householdId } = await currentHousehold();
+  const { uid, householdId } = await requireHouseholdContext();
   const { values, errors } = parseFormData(formData);
   if (errors) return { fieldErrors: errors };
 
@@ -296,7 +282,7 @@ export async function updateTransaction(
   const snap = await ref.get();
   const existing = snap.data();
   if (!existing) return { error: "Transação não encontrada." };
-  if (existing.createdBy !== session.uid) {
+  if (existing.createdBy !== uid) {
     return { error: "Você só pode editar transações que lançou." };
   }
 
@@ -360,7 +346,7 @@ export async function updateTransaction(
 }
 
 export async function deleteRecurringGroup(recurringId: string) {
-  const { session, householdId } = await currentHousehold();
+  const { uid, householdId } = await requireHouseholdContext();
   const db = adminDb();
   const col = db
     .collection("households")
@@ -371,7 +357,7 @@ export async function deleteRecurringGroup(recurringId: string) {
   if (snap.empty) return;
 
   const owner = snap.docs[0]!.data().createdBy;
-  if (owner !== session.uid) {
+  if (owner !== uid) {
     throw new Error("Você só pode apagar transações que lançou.");
   }
 
@@ -384,7 +370,7 @@ export async function deleteRecurringGroup(recurringId: string) {
 }
 
 export async function deleteInstallmentGroup(installmentId: string) {
-  const { session, householdId } = await currentHousehold();
+  const { uid, householdId } = await requireHouseholdContext();
   const db = adminDb();
   const col = db
     .collection("households")
@@ -395,7 +381,7 @@ export async function deleteInstallmentGroup(installmentId: string) {
   if (snap.empty) return;
 
   const owner = snap.docs[0]!.data().createdBy;
-  if (owner !== session.uid) {
+  if (owner !== uid) {
     throw new Error("Você só pode apagar transações que lançou.");
   }
 
@@ -408,7 +394,7 @@ export async function deleteInstallmentGroup(installmentId: string) {
 }
 
 export async function deleteTransaction(id: string) {
-  const { session, householdId } = await currentHousehold();
+  const { uid, householdId } = await requireHouseholdContext();
   const db = adminDb();
   const ref = db
     .collection("households")
@@ -418,7 +404,7 @@ export async function deleteTransaction(id: string) {
   const snap = await ref.get();
   const existing = snap.data();
   if (!existing) return;
-  if (existing.createdBy !== session.uid) {
+  if (existing.createdBy !== uid) {
     throw new Error("Você só pode apagar transações que lançou.");
   }
 

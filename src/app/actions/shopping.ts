@@ -6,6 +6,7 @@ import { addMonths } from "date-fns";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
+import { applyFieldErrors, type ActionState } from "@/lib/action-state";
 import { guessSection, normalizeName } from "@/lib/shopping/categorize";
 import {
   addListItemSchema,
@@ -20,49 +21,11 @@ import {
   type UpdateShoppingItemInput,
 } from "@/lib/validators";
 
-export interface ShoppingActionState {
-  success?: boolean;
-  error?: string;
-  fieldErrors?: Record<string, string>;
-}
-
-function applyFieldErrors(
-  issues: ReadonlyArray<{ path: PropertyKey[]; message: string }>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const issue of issues) {
-    const key = String(issue.path[0] ?? "_");
-    if (!out[key]) out[key] = issue.message;
-  }
-  return out;
-}
+export type ShoppingActionState = ActionState;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const AVG_WINDOW_DAYS = 90;
-
-async function computeAveragePrice90d(
-  householdId: string,
-  itemId: string,
-  tx: FirebaseFirestore.Transaction,
-): Promise<number | null> {
-  const cutoff = Timestamp.fromMillis(
-    Date.now() - AVG_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const ref = adminDb()
-    .collection("households")
-    .doc(householdId)
-    .collection("shoppingItems")
-    .doc(itemId)
-    .collection("purchases")
-    .where("purchasedAt", ">=", cutoff);
-  const snap = await tx.get(ref);
-  if (snap.empty) return null;
-  const total = snap.docs.reduce((s, d) => s + Number(d.data().price ?? 0), 0);
-  return total / snap.docs.length;
-}
 
 async function findOrCreateCatalogItem(
   householdId: string,
@@ -380,7 +343,7 @@ export async function recordPurchase(
   input: RecordPurchaseInput,
 ): Promise<
   | { success: true; tripId: string; transactionId: string; finalized: boolean }
-  | { success?: false; error?: string; fieldErrors?: Record<string, string> }
+  | (ShoppingActionState & { success?: false })
 > {
   const ctx = await requireHouseholdContext();
   const parsed = recordPurchaseSchema.safeParse(input);

@@ -59,6 +59,9 @@ export function TransactionsFilters({
   }
 
   useEffect(() => {
+    // Sincroniza search local com URL quando o prop muda externamente
+    // (ex: back button, link compartilhado). O debounce abaixo previne loop.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearch(currentSearch);
   }, [currentSearch]);
 

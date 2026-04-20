@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
@@ -23,14 +23,14 @@ export function ListItemRow({ entry }: { entry: ShoppingListEntry }) {
   const [pending, startTransition] = useTransition();
 
   // Optimistic uncheck — feedback instantâneo.
+  // Derivado como "override se diferente do prop"; limpa sozinho quando
+  // o prop chega alinhado (evita useEffect + setState).
   const [optimisticStatus, setOptimisticStatus] =
     useState<OptimisticStatus | null>(null);
-
-  useEffect(() => {
-    setOptimisticStatus(null);
-  }, [entry.status]);
-
-  const effectiveStatus = optimisticStatus ?? entry.status;
+  const effectiveStatus =
+    optimisticStatus && optimisticStatus !== entry.status
+      ? optimisticStatus
+      : entry.status;
   const bought = effectiveStatus === "bought";
   const checked = effectiveStatus === "checked";
 
@@ -44,6 +44,7 @@ export function ListItemRow({ entry }: { entry: ShoppingListEntry }) {
         setOptimisticStatus(null);
         return;
       }
+      setOptimisticStatus(null);
       router.refresh();
     });
   }
