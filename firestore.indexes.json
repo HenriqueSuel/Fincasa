@@ -19,14 +19,6 @@
       ]
     },
     {
-      "collectionGroup": "invites",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "token", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "shoppingList",
       "queryScope": "COLLECTION",
       "fields": [
