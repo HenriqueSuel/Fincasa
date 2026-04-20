@@ -32,16 +32,16 @@ export function firstInvoiceDueDate(
   const monthIndex = purchaseDate.getMonth();
   const day = purchaseDate.getDate();
 
-  // Se comprou até o fechamento → fatura fecha neste mês.
-  // A fatura vence no próximo mês (se dueDay > closingDay) ou 2 meses depois.
-  // Convenção comum: se dueDay > closingDay → due = mês(closing)+1
-  //                  senão (due <= closing) → due = mês(closing)+2 (fatura vira)
+  // Em qual mês a fatura fecha?
+  //   - Compra no dia do fechamento (inclusive) ou antes → fecha este mês
+  //   - Depois do fechamento → fecha no próximo mês
   const boughtAfterClosing = day > card.closingDay;
   const closingMonthOffset = boughtAfterClosing ? 1 : 0;
 
-  // Quantos meses entre fechamento e vencimento
-  const dueMonthOffsetFromClosing =
-    card.dueDay > card.closingDay ? 1 : card.dueDay < card.closingDay ? 1 : 0;
+  // Em qual mês a fatura vence (relativo ao mês de fechamento)?
+  //   - Se dueDay > closingDay (ex: fecha 15, vence 25) → mesmo mês (offset 0)
+  //   - Se dueDay < closingDay (ex: fecha 25, vence 5)  → mês seguinte (offset 1)
+  const dueMonthOffsetFromClosing = card.dueDay < card.closingDay ? 1 : 0;
 
   const totalOffset = closingMonthOffset + dueMonthOffsetFromClosing;
   return clampDayToMonth(year, monthIndex + totalOffset, card.dueDay);
