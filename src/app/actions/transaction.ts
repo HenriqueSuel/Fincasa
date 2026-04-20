@@ -8,7 +8,10 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { parseLocalDate } from "@/lib/dates";
-import { computeInstallmentDates } from "@/lib/installments";
+import {
+  computeInstallmentDates,
+  firstInvoiceDueDate,
+} from "@/lib/installments";
 import { getCard } from "@/lib/cards-query";
 import type { ActionState } from "@/lib/action-state";
 
@@ -156,6 +159,15 @@ export async function createTransaction(
   const isInstalled = values.installments > 1;
   const isRecurring = values.recurring && !isInstalled;
 
+  // Cartão: se a compra é no crédito com cartão selecionado, as parcelas
+  // (inclusive a única, à vista) caem na fatura correspondente, não na
+  // data da compra.
+  const card =
+    values.cardId && values.paymentMethod === "credit"
+      ? await getCard(householdId, values.cardId)
+      : null;
+  const invoiceDate = card ? firstInvoiceDueDate(values.date, card) : null;
+
   if (isRecurring) {
     const recurringId = randomUUID();
     const batch = db.batch();
@@ -196,9 +208,6 @@ export async function createTransaction(
     const baseCents = Math.floor(totalCents / values.installments);
     const remainderCents = totalCents - baseCents * values.installments;
 
-    const card = values.cardId
-      ? await getCard(householdId, values.cardId)
-      : null;
     const dates = computeInstallmentDates(
       values.date,
       values.installments,
@@ -243,6 +252,9 @@ export async function createTransaction(
   const txRef = txCol.doc();
   const contrib = contributionAmount(values);
 
+  // À vista no crédito com cartão: data passa a ser a fatura
+  const effectiveDate = invoiceDate ?? values.date;
+
   await db.runTransaction(async (tx) => {
     tx.set(txRef, {
       type: values.type,
@@ -254,7 +266,7 @@ export async function createTransaction(
         ? { customSubcategory: values.customSubcategory }
         : {}),
       ...(values.goalId ? { goalId: values.goalId } : {}),
-      date: Timestamp.fromDate(values.date),
+      date: Timestamp.fromDate(effectiveDate),
       ...(values.paymentMethod ? { paymentMethod: values.paymentMethod } : {}),
       ...(values.cardId ? { cardId: values.cardId } : {}),
       createdBy: uid,

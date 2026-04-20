@@ -7,7 +7,10 @@ import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { applyFieldErrors, type ActionState } from "@/lib/action-state";
 import { getCard } from "@/lib/cards-query";
-import { computeInstallmentDates } from "@/lib/installments";
+import {
+  computeInstallmentDates,
+  firstInvoiceDueDate,
+} from "@/lib/installments";
 import { guessSection, normalizeName } from "@/lib/shopping/categorize";
 import {
   addListItemSchema,
@@ -477,6 +480,10 @@ export async function recordPurchase(
           txRefs.push(ref);
         }
       } else {
+        // À vista no crédito com cartão: data vira a data da fatura.
+        const effectiveDate = card
+          ? Timestamp.fromDate(firstInvoiceDueDate(parsed.data.date, card))
+          : dateTs;
         const ref = txCol.doc();
         tx.set(ref, {
           type: "expense",
@@ -484,7 +491,7 @@ export async function recordPurchase(
           description: parsed.data.description,
           category: "essentials",
           subcategory: "Mercado",
-          date: dateTs,
+          date: effectiveDate,
           paymentMethod: parsed.data.paymentMethod,
           ...(parsed.data.cardId ? { cardId: parsed.data.cardId } : {}),
           tripId: tripRef.id,
