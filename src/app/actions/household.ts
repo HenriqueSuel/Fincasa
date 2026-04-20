@@ -7,11 +7,16 @@ import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext, requireSession } from "@/lib/auth/guards";
 import type { ActionState } from "@/lib/action-state";
 import { applyFieldErrors } from "@/lib/action-state";
-import { householdSchema, updateMyIncomeSchema } from "@/lib/validators";
+import {
+  householdSchema,
+  updateHouseholdNameSchema,
+  updateMyIncomeSchema,
+} from "@/lib/validators";
 import { BUDGET_ALLOCATION } from "@/lib/categories";
 
 export type CreateHouseholdState = ActionState<"name" | "monthlyIncome">;
 export type UpdateMyIncomeState = ActionState<"monthlyIncome">;
+export type UpdateHouseholdNameState = ActionState<"name">;
 
 export async function createHousehold(
   _prev: CreateHouseholdState | undefined,
@@ -114,5 +119,30 @@ export async function updateMyIncome(
   revalidatePath("/");
   revalidatePath("/settings/household");
   revalidatePath("/reports");
+  return { success: true };
+}
+
+export async function updateHouseholdName(
+  _prev: UpdateHouseholdNameState | undefined,
+  formData: FormData,
+): Promise<UpdateHouseholdNameState> {
+  const ctx = await requireHouseholdContext();
+  if (!ctx.isOwner) {
+    return { error: "Só o dono pode renomear a família." };
+  }
+
+  const parsed = updateHouseholdNameSchema.safeParse({
+    name: String(formData.get("name") ?? ""),
+  });
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+  }
+
+  await adminDb()
+    .collection("households")
+    .doc(ctx.householdId)
+    .update({ name: parsed.data.name });
+
+  revalidatePath("/", "layout");
   return { success: true };
 }

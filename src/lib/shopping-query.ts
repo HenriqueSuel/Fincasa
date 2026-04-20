@@ -16,7 +16,10 @@ import type {
 const MAX_CATALOG = 500;
 const MAX_PURCHASES = 30;
 
-export async function listCatalog(householdId: string): Promise<ShoppingItem[]> {
+export async function listCatalog(
+  householdId: string,
+  opts: { includeArchived?: boolean } = {},
+): Promise<ShoppingItem[]> {
   const snap = await adminDb()
     .collection("households")
     .doc(householdId)
@@ -24,7 +27,8 @@ export async function listCatalog(householdId: string): Promise<ShoppingItem[]> 
     .orderBy("lastPurchasedAt", "desc")
     .limit(MAX_CATALOG)
     .get();
-  return snap.docs.map(toShoppingItem);
+  const items = snap.docs.map(toShoppingItem);
+  return opts.includeArchived ? items : items.filter((i) => !i.archived);
 }
 
 export async function getShoppingItem(

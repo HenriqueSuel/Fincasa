@@ -615,3 +615,101 @@ export async function updateShoppingItem(
   revalidatePath(`/shopping/items/${itemId}`);
   return { success: true };
 }
+
+// ---------------------------------------------------------------------------
+// Archive (remove do catálogo mantendo histórico de compras)
+// ---------------------------------------------------------------------------
+
+export async function archiveShoppingItem(
+  itemId: string,
+): Promise<ShoppingActionState> {
+  const ctx = await requireHouseholdContext();
+  const db = adminDb();
+  const householdRef = db.collection("households").doc(ctx.householdId);
+  const itemRef = householdRef.collection("shoppingItems").doc(itemId);
+
+  try {
+    await db.runTransaction(async (tx) => {
+      // Fase 1: reads
+      const itemSnap = await tx.get(itemRef);
+      if (!itemSnap.exists) throw new Error("Item não encontrado.");
+
+      // Busca entries ativas (pending/checked) deste item — vamos remover também
+      const listSnap = await tx.get(
+        householdRef
+          .collection("shoppingList")
+          .where("itemId", "==", itemId),
+      );
+
+      // Fase 2: writes
+      tx.update(itemRef, { archived: true });
+      for (const d of listSnap.docs) {
+        // Remove todas as entries (inclusive bought) — limpa a referência na lista
+        tx.delete(d.ref);
+      }
+    });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Não foi possível remover.",
+    };
+  }
+
+  revalidatePath("/shopping");
+  revalidatePath("/shopping/items");
+  revalidatePath(`/shopping/items/${itemId}`);
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Purge (apaga definitivamente o produto + histórico de compras + entries
+// da lista). As trips passadas mantêm o total da despesa, mas vão mostrar
+// menos itens do que antes.
+// ---------------------------------------------------------------------------
+
+const PURGE_BATCH_SIZE = 400;
+
+export async function purgeShoppingItem(
+  itemId: string,
+): Promise<ShoppingActionState & { purchasesDeleted?: number }> {
+  const ctx = await requireHouseholdContext();
+  const db = adminDb();
+  const householdRef = db.collection("households").doc(ctx.householdId);
+  const itemRef = householdRef.collection("shoppingItems").doc(itemId);
+
+  try {
+    const itemSnap = await itemRef.get();
+    if (!itemSnap.exists) return { error: "Item não encontrado." };
+
+    // Coleta tudo que precisa apagar
+    const [purchasesSnap, listSnap] = await Promise.all([
+      itemRef.collection("purchases").get(),
+      householdRef
+        .collection("shoppingList")
+        .where("itemId", "==", itemId)
+        .get(),
+    ]);
+
+    const docsToDelete: FirebaseFirestore.DocumentReference[] = [
+      ...purchasesSnap.docs.map((d) => d.ref),
+      ...listSnap.docs.map((d) => d.ref),
+      itemRef,
+    ];
+
+    // Batches de até 400 writes (limite prático do Firestore é 500)
+    for (let i = 0; i < docsToDelete.length; i += PURGE_BATCH_SIZE) {
+      const chunk = docsToDelete.slice(i, i + PURGE_BATCH_SIZE);
+      const batch = db.batch();
+      for (const ref of chunk) batch.delete(ref);
+      await batch.commit();
+    }
+
+    revalidatePath("/shopping");
+    revalidatePath("/shopping/items");
+    revalidatePath("/shopping/trips", "page");
+    return { success: true, purchasesDeleted: purchasesSnap.size };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Não foi possível apagar.",
+    };
+  }
+}

@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { getBaseUrl } from "@/lib/base-url";
+import { EditHouseholdNameDialog } from "./edit-household-name-dialog";
 import { EditIncomeDialog } from "./edit-income-dialog";
 import { InviteSection } from "./invite-section";
 
@@ -57,8 +58,13 @@ export default async function HouseholdSettingsPage() {
         >
           <ArrowLeft className="size-4" />
         </Link>
-        <div>
-          <h1 className="text-2xl font-semibold">{household.name}</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-1">
+            <h1 className="text-2xl font-semibold">{household.name}</h1>
+            {isOwner ? (
+              <EditHouseholdNameDialog currentName={household.name} />
+            ) : null}
+          </div>
           <p className="text-sm text-muted-foreground">
             Renda combinada:{" "}
             <span className="text-foreground font-medium">

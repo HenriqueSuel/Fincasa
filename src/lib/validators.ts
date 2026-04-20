@@ -90,6 +90,14 @@ export const updateMyIncomeSchema = z.object({
 
 export type UpdateMyIncomeInput = z.infer<typeof updateMyIncomeSchema>;
 
+export const updateHouseholdNameSchema = z.object({
+  name: z.string().trim().min(1, "Nome obrigatório").max(60),
+});
+
+export type UpdateHouseholdNameInput = z.infer<
+  typeof updateHouseholdNameSchema
+>;
+
 export const customSubcategorySchema = z.object({
   category: z.enum(["essentials", "qualityOfLife", "goals"] as const),
   name: z.string().trim().min(1, "Nome obrigatório").max(40),

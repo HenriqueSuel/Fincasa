@@ -10,6 +10,7 @@ import {
 } from "@/lib/shopping-query";
 import { formatBRL } from "@/lib/money";
 import { SHOPPING_SECTION_LABELS } from "@/types/enums";
+import { ArchiveItemButton } from "./archive-item-button";
 import { EditItemForm } from "./edit-item-form";
 import { MarkAsBoughtForm } from "./mark-as-bought-form";
 
@@ -125,6 +126,42 @@ export default async function ItemDetailPage({
           Editar produto
         </h2>
         <EditItemForm item={item} />
+      </section>
+
+      <section className="flex flex-col gap-3 pt-2">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+          Zona de perigo
+        </h2>
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4">
+          {item.archived ? (
+            <>
+              <p className="text-sm font-medium">Produto arquivado</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Não aparece no catálogo nem no autocomplete. O histórico
+                continua visível. Se quiser remover definitivamente, use{" "}
+                <strong>Apagar permanentemente</strong> abaixo.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium">Remover do catálogo</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                <strong>Arquivar</strong> esconde o produto do autocomplete e
+                do catálogo, mas preserva as compras nas trips.{" "}
+                <strong>Apagar permanentemente</strong> remove o produto e
+                todo o histórico dele — as trips passadas vão mostrar menos
+                itens do que antes.
+              </p>
+            </>
+          )}
+          <div className="mt-3">
+            <ArchiveItemButton
+              itemId={item.id}
+              itemName={item.name}
+              purchaseCount={item.purchaseCount}
+            />
+          </div>
+        </div>
       </section>
     </main>
   );

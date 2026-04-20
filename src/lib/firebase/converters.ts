@@ -223,6 +223,7 @@ export function toShoppingItem(snap: Snap): ShoppingItem {
     averagePrice90d: d.averagePrice90d ?? undefined,
     purchaseCount: Number(d.purchaseCount ?? 0),
     lastPurchasedAt: tsOpt(d.lastPurchasedAt),
+    archived: d.archived === true ? true : undefined,
     createdBy: d.createdBy,
     createdAt: ts(d.createdAt),
   };

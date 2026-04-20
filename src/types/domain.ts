@@ -149,6 +149,7 @@ export interface ShoppingItem {
   averagePrice90d?: number;
   purchaseCount: number;
   lastPurchasedAt?: Date;
+  archived?: boolean;
   createdBy: string;
   createdAt: Date;
 }
