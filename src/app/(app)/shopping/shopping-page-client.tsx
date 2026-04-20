@@ -7,7 +7,10 @@ import { SHOPPING_SECTION_LABELS, type ShoppingSection } from "@/types/enums";
 import type { ShoppingItem, ShoppingListEntry } from "@/types/domain";
 import { AddItemInput } from "./add-item-input";
 import { ListItemRow } from "./list-item-row";
-import { RecordPurchaseDialog } from "./record-purchase-dialog";
+import {
+  RecordPurchaseDialog,
+  type CardOption,
+} from "./record-purchase-dialog";
 
 const SECTION_ORDER: ShoppingSection[] = [
   "frutas_verduras",
@@ -26,12 +29,14 @@ interface Props {
   catalog: ShoppingItem[];
   entries: ShoppingListEntry[];
   storeSuggestions: string[];
+  cards?: CardOption[];
 }
 
 export function ShoppingPageClient({
   catalog,
   entries,
   storeSuggestions,
+  cards = [],
 }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -141,6 +146,7 @@ export function ShoppingPageClient({
         onOpenChange={setDialogOpen}
         entries={checked}
         storeSuggestions={storeSuggestions}
+        cards={cards}
         isFinal={isFinal}
       />
     </>

@@ -1,6 +1,7 @@
 import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import type {
+  CreditCard,
   CustomSubcategory,
   Goal,
   Household,
@@ -107,6 +108,7 @@ export function toTransaction(snap: Snap): Transaction {
     customSubcategory: d.customSubcategory ?? undefined,
     goalId: d.goalId ?? undefined,
     tripId: d.tripId ?? undefined,
+    cardId: d.cardId ?? undefined,
     date: ts(d.date),
     paymentMethod: d.paymentMethod ?? undefined,
     createdBy: d.createdBy,
@@ -270,6 +272,20 @@ export function toShoppingListEntry(snap: Snap): ShoppingListEntry {
     addedAt: ts(d.addedAt),
     checkedAt: tsOpt(d.checkedAt),
     boughtAt: tsOpt(d.boughtAt),
+  };
+}
+
+export function toCreditCard(snap: Snap): CreditCard {
+  const d = snap.data();
+  if (!d) throw new Error("CreditCard doc missing");
+  return {
+    id: snap.id,
+    name: d.name,
+    closingDay: Number(d.closingDay ?? 1),
+    dueDay: Number(d.dueDay ?? 10),
+    color: d.color ?? undefined,
+    createdBy: d.createdBy,
+    createdAt: ts(d.createdAt),
   };
 }
 

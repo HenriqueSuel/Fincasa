@@ -6,6 +6,7 @@ import {
   Tag,
   BarChart3,
   ShoppingCart,
+  CreditCard,
   ChevronRight,
 } from "lucide-react";
 import { SignOutButton } from "@/features/auth/sign-out-button";
@@ -36,6 +37,12 @@ const sections = [
     label: "Lista de mercado",
     description: "Histórico e ficha dos produtos",
     icon: ShoppingCart,
+  },
+  {
+    href: "/settings/cards",
+    label: "Cartões de crédito",
+    description: "Dia de fechamento e vencimento por cartão",
+    icon: CreditCard,
   },
 ];
 

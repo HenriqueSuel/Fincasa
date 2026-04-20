@@ -2,11 +2,12 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { addMonths } from "date-fns";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { applyFieldErrors, type ActionState } from "@/lib/action-state";
+import { getCard } from "@/lib/cards-query";
+import { computeInstallmentDates } from "@/lib/installments";
 import { guessSection, normalizeName } from "@/lib/shopping/categorize";
 import {
   addListItemSchema,
@@ -368,6 +369,13 @@ export async function recordPurchase(
   const db = adminDb();
   const householdRef = db.collection("households").doc(ctx.householdId);
 
+  // Busca o cartão (se selecionado) FORA da runTransaction — é config, não
+  // precisa estar no snapshot atômico com as writes.
+  const card =
+    parsed.data.cardId && parsed.data.paymentMethod === "credit"
+      ? await getCard(ctx.householdId, parsed.data.cardId)
+      : null;
+
   try {
     const result = await db.runTransaction(async (tx) => {
       // =====================================================================
@@ -436,11 +444,17 @@ export async function recordPurchase(
         const baseCents = Math.floor(totalCents / installments);
         const remainderCents = totalCents - baseCents * installments;
 
+        const dates = computeInstallmentDates(
+          parsed.data.date,
+          installments,
+          card,
+        );
+
         for (let i = 0; i < installments; i++) {
           const ref = txCol.doc();
           const cents = i === 0 ? baseCents + remainderCents : baseCents;
           const amount = cents / 100;
-          const dueDate = Timestamp.fromDate(addMonths(parsed.data.date, i));
+          const dueDate = Timestamp.fromDate(dates[i]!);
           tx.set(ref, {
             type: "expense",
             amount,
@@ -449,6 +463,7 @@ export async function recordPurchase(
             subcategory: "Mercado",
             date: dueDate,
             paymentMethod: "credit",
+            ...(parsed.data.cardId ? { cardId: parsed.data.cardId } : {}),
             tripId: tripRef.id,
             installmentId,
             installmentNumber: i + 1,
@@ -471,6 +486,7 @@ export async function recordPurchase(
           subcategory: "Mercado",
           date: dateTs,
           paymentMethod: parsed.data.paymentMethod,
+          ...(parsed.data.cardId ? { cardId: parsed.data.cardId } : {}),
           tripId: tripRef.id,
           createdBy: ctx.uid,
           createdByName: ctx.user.name,

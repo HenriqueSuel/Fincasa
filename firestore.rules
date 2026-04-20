@@ -104,6 +104,13 @@ service cloud.firestore {
       match /shoppingTrips/{tripId} {
         allow read, write: if isMember(householdId);
       }
+
+      // --------------------------------------------------------------
+      // Subcoleções: creditCards — ficha do cartão (dia de fechamento)
+      // --------------------------------------------------------------
+      match /creditCards/{cardId} {
+        allow read, write: if isMember(householdId);
+      }
     }
   }
 }

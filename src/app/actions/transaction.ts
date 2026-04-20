@@ -8,6 +8,8 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { parseLocalDate } from "@/lib/dates";
+import { computeInstallmentDates } from "@/lib/installments";
+import { getCard } from "@/lib/cards-query";
 import type { ActionState } from "@/lib/action-state";
 
 export type TransactionFormState = ActionState<
@@ -47,6 +49,7 @@ interface ParsedValues {
   paymentMethod?: (typeof ALLOWED_PAYMENT)[number];
   installments: number;
   recurring: boolean;
+  cardId?: string;
 }
 
 function parseFormData(formData: FormData): {
@@ -104,6 +107,11 @@ function parseFormData(formData: FormData): {
 
   const recurring = formData.get("recurring") === "on" && installments === 1;
 
+  const cardId =
+    paymentMethod === "credit"
+      ? String(formData.get("cardId") ?? "").trim() || undefined
+      : undefined;
+
   return {
     values: {
       type,
@@ -115,6 +123,7 @@ function parseFormData(formData: FormData): {
       goalId,
       date: date ?? new Date(),
       paymentMethod,
+      cardId,
       installments,
       recurring,
     },
@@ -187,12 +196,21 @@ export async function createTransaction(
     const baseCents = Math.floor(totalCents / values.installments);
     const remainderCents = totalCents - baseCents * values.installments;
 
+    const card = values.cardId
+      ? await getCard(householdId, values.cardId)
+      : null;
+    const dates = computeInstallmentDates(
+      values.date,
+      values.installments,
+      card,
+    );
+
     const batch = db.batch();
     for (let i = 0; i < values.installments; i++) {
       const ref = txCol.doc();
       const cents = i === 0 ? baseCents + remainderCents : baseCents;
       const amount = cents / 100;
-      const date = addMonths(values.date, i);
+      const date = dates[i] ?? addMonths(values.date, i);
       batch.set(ref, {
         type: values.type,
         amount,
@@ -204,6 +222,7 @@ export async function createTransaction(
           : {}),
         date: Timestamp.fromDate(date),
         paymentMethod: "credit",
+        ...(values.cardId ? { cardId: values.cardId } : {}),
         installmentId,
         installmentNumber: i + 1,
         installmentCount: values.installments,
@@ -237,6 +256,7 @@ export async function createTransaction(
       ...(values.goalId ? { goalId: values.goalId } : {}),
       date: Timestamp.fromDate(values.date),
       ...(values.paymentMethod ? { paymentMethod: values.paymentMethod } : {}),
+      ...(values.cardId ? { cardId: values.cardId } : {}),
       createdBy: uid,
       createdByName: user.name,
       createdAt: now,

@@ -7,6 +7,7 @@ import { requireHouseholdContext } from "@/lib/auth/guards";
 import { toTransaction } from "@/lib/firebase/converters";
 import { listGoals } from "@/lib/goals-query";
 import { listCustomSubcategories } from "@/lib/subcategories-query";
+import { listCards } from "@/lib/cards-query";
 import { getTrip } from "@/lib/shopping-query";
 import { TransactionForm } from "@/components/transactions/transaction-form";
 import { updateTransaction } from "@/app/actions/transaction";
@@ -43,9 +44,10 @@ export default async function EditTransactionPage({
   if (tx.createdBy !== uid) redirect("/transactions");
 
   const boundUpdate = updateTransaction.bind(null, id);
-  const [goals, customSubcategories, trip] = await Promise.all([
+  const [goals, customSubcategories, cards, trip] = await Promise.all([
     listGoals(householdId, { activeOnly: true }),
     listCustomSubcategories(householdId),
+    listCards(householdId),
     tx.tripId ? getTrip(householdId, tx.tripId) : Promise.resolve(null),
   ]);
 
@@ -127,6 +129,11 @@ export default async function EditTransactionPage({
         submitLabel="Salvar alterações"
         goals={goals.map((g) => ({ id: g.id, name: g.name, icon: g.icon }))}
         customSubcategories={customSubcategories}
+        cards={cards.map((c) => ({
+          id: c.id,
+          name: c.name,
+          closingDay: c.closingDay,
+        }))}
         allowInstallments={false}
         initial={{
           type: tx.type === "income" ? "income" : "expense",
@@ -138,6 +145,7 @@ export default async function EditTransactionPage({
           goalId: tx.goalId,
           date: tx.date,
           paymentMethod: tx.paymentMethod,
+          cardId: tx.cardId,
         }}
       />
     </main>

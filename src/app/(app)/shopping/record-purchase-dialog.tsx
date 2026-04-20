@@ -40,11 +40,18 @@ import {
 import { recordPurchase } from "@/app/actions/shopping";
 import type { ShoppingListEntry } from "@/types/domain";
 
+export interface CardOption {
+  id: string;
+  name: string;
+  closingDay: number;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   entries: ShoppingListEntry[];
   storeSuggestions: string[];
+  cards?: CardOption[];
   isFinal: boolean;
 }
 
@@ -53,6 +60,7 @@ export function RecordPurchaseDialog({
   onOpenChange,
   entries,
   storeSuggestions,
+  cards = [],
   isFinal,
 }: Props) {
   const router = useRouter();
@@ -74,6 +82,7 @@ export function RecordPurchaseDialog({
       paymentMethod: "credit",
       date: new Date(),
       installments: 1,
+      cardId: undefined,
     },
   });
 
@@ -86,6 +95,7 @@ export function RecordPurchaseDialog({
         paymentMethod: "credit",
         date: new Date(),
         installments: 1,
+        cardId: undefined,
       });
     }
   }, [open, total, form]);
@@ -110,8 +120,9 @@ export function RecordPurchaseDialog({
       : 0;
 
   useEffect(() => {
-    if (!canInstall && installments > 1) {
-      form.setValue("installments", 1);
+    if (!canInstall) {
+      if (installments > 1) form.setValue("installments", 1);
+      form.setValue("cardId", undefined);
     }
   }, [canInstall, installments, form]);
 
@@ -307,6 +318,44 @@ export function RecordPurchaseDialog({
                 </FormItem>
               )}
             />
+
+            {canInstall && cards.length > 0 ? (
+              <FormField
+                control={form.control}
+                name="cardId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel htmlFor="cardId">Cartão</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ?? "__none__"}
+                        onValueChange={(v) =>
+                          field.onChange(v === "__none__" ? undefined : v)
+                        }
+                      >
+                        <SelectTrigger id="cardId">
+                          <SelectValue placeholder="Sem cartão específico" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">
+                            Sem cartão específico
+                          </SelectItem>
+                          {cards.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}{" "}
+                              <span className="text-muted-foreground">
+                                (fecha dia {c.closingDay})
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             {canInstall ? (
               <FormField

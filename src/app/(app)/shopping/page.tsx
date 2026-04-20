@@ -7,6 +7,7 @@ import {
   listShoppingList,
   listStoreNames,
 } from "@/lib/shopping-query";
+import { listCards } from "@/lib/cards-query";
 import { ShoppingPageClient } from "./shopping-page-client";
 
 export const metadata: Metadata = { title: "Lista de mercado" };
@@ -14,10 +15,11 @@ export const metadata: Metadata = { title: "Lista de mercado" };
 export default async function ShoppingPage() {
   const { householdId } = await requireHouseholdContext();
 
-  const [catalog, entries, storeSuggestions] = await Promise.all([
+  const [catalog, entries, storeSuggestions, cards] = await Promise.all([
     listCatalog(householdId),
     listShoppingList(householdId),
     listStoreNames(householdId),
+    listCards(householdId),
   ]);
 
   return (
@@ -45,6 +47,11 @@ export default async function ShoppingPage() {
         catalog={catalog}
         entries={entries}
         storeSuggestions={storeSuggestions}
+        cards={cards.map((c) => ({
+          id: c.id,
+          name: c.name,
+          closingDay: c.closingDay,
+        }))}
       />
     </main>
   );

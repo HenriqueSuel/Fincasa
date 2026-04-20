@@ -83,6 +83,7 @@ export interface Transaction {
   customSubcategory?: string;
   goalId?: string;
   tripId?: string;
+  cardId?: string;
   date: Date;
   paymentMethod?: PaymentMethod;
   createdBy: string;
@@ -200,5 +201,15 @@ export interface ShoppingTrip {
   purchasedBy: string;
   purchasedByName: string;
   purchasedAt: Date;
+  createdAt: Date;
+}
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  closingDay: number;
+  dueDay: number;
+  color?: string;
+  createdBy: string;
   createdAt: Date;
 }

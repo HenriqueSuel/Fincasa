@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listGoals } from "@/lib/goals-query";
 import { listCustomSubcategories } from "@/lib/subcategories-query";
+import { listCards } from "@/lib/cards-query";
 import { TransactionForm } from "@/components/transactions/transaction-form";
 import { createTransaction } from "@/app/actions/transaction";
 
@@ -16,9 +17,10 @@ export default async function NewTransactionPage({
 }) {
   const { goalId } = await searchParams;
   const { householdId } = await requireHouseholdContext();
-  const [goals, customSubcategories] = await Promise.all([
+  const [goals, customSubcategories, cards] = await Promise.all([
     listGoals(householdId, { activeOnly: true }),
     listCustomSubcategories(householdId),
+    listCards(householdId),
   ]);
 
   const preselectedGoal = goalId
@@ -45,6 +47,11 @@ export default async function NewTransactionPage({
         submitLabel={preselectedGoal ? "Lançar aporte" : "Lançar"}
         goals={goals.map((g) => ({ id: g.id, name: g.name, icon: g.icon }))}
         customSubcategories={customSubcategories}
+        cards={cards.map((c) => ({
+          id: c.id,
+          name: c.name,
+          closingDay: c.closingDay,
+        }))}
         initial={
           preselectedGoal
             ? {

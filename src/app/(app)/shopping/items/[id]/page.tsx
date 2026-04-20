@@ -10,6 +10,7 @@ import {
 } from "@/lib/shopping-query";
 import { formatBRL } from "@/lib/money";
 import { SHOPPING_SECTION_LABELS } from "@/types/enums";
+import { ItemPriceChart } from "@/components/charts/item-price-chart";
 import { ArchiveItemButton } from "./archive-item-button";
 import { EditItemForm } from "./edit-item-form";
 import { MarkAsBoughtForm } from "./mark-as-bought-form";
@@ -73,6 +74,24 @@ export default async function ItemDetailPage({
 
       {activeEntry ? (
         <MarkAsBoughtForm item={item} entry={activeEntry} />
+      ) : null}
+
+      {purchases.length >= 2 ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Evolução de preço
+          </h2>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <ItemPriceChart
+              purchases={purchases.map((p) => ({
+                date: p.purchasedAt,
+                price: p.price,
+                brand: p.brand,
+                store: p.store,
+              }))}
+            />
+          </div>
+        </section>
       ) : null}
 
       <section className="flex flex-col gap-3">

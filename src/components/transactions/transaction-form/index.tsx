@@ -45,6 +45,12 @@ export interface CustomSubcategoryOption {
   icon?: string;
 }
 
+export interface CardOption {
+  id: string;
+  name: string;
+  closingDay: number;
+}
+
 interface Initial {
   type?: "expense" | "income";
   amount?: number;
@@ -56,6 +62,7 @@ interface Initial {
   date?: Date;
   paymentMethod?: string;
   installments?: number;
+  cardId?: string;
 }
 
 interface Props {
@@ -67,6 +74,7 @@ interface Props {
   submitLabel?: string;
   goals?: GoalOption[];
   customSubcategories?: CustomSubcategoryOption[];
+  cards?: CardOption[];
   allowInstallments?: boolean;
 }
 
@@ -81,6 +89,7 @@ function buildFormData(values: TransactionInput): FormData {
   if (values.goalId) fd.set("goalId", values.goalId);
   fd.set("date", toLocalDateKey(values.date));
   if (values.paymentMethod) fd.set("paymentMethod", values.paymentMethod);
+  if (values.cardId) fd.set("cardId", values.cardId);
   fd.set("installments", String(values.installments));
   if (values.recurring) fd.set("recurring", "on");
   return fd;
@@ -92,6 +101,7 @@ export function TransactionForm({
   submitLabel,
   goals = [],
   customSubcategories = [],
+  cards = [],
   allowInstallments = true,
 }: Props) {
   const [pending, startTransition] = useTransition();
@@ -114,6 +124,7 @@ export function TransactionForm({
         undefined,
       installments: initial?.installments ?? 1,
       recurring: false,
+      cardId: initial?.cardId ?? undefined,
     },
   });
 
@@ -335,6 +346,7 @@ export function TransactionForm({
                         field.onChange(next);
                         if (next !== "credit") {
                           form.setValue("installments", 1);
+                          form.setValue("cardId", undefined);
                         }
                       }}
                     >
@@ -356,6 +368,48 @@ export function TransactionForm({
             />
           ) : null}
         </div>
+
+        {type === "expense" && paymentMethod === "credit" && cards.length > 0 ? (
+          <FormField
+            control={form.control}
+            name="cardId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="cardId">Cartão</FormLabel>
+                <FormControl>
+                  <Select
+                    value={field.value ?? "__none__"}
+                    onValueChange={(v) =>
+                      field.onChange(v === "__none__" ? undefined : v)
+                    }
+                  >
+                    <SelectTrigger id="cardId">
+                      <SelectValue placeholder="Sem cartão específico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        Sem cartão específico
+                      </SelectItem>
+                      {cards.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{" "}
+                          <span className="text-muted-foreground">
+                            (fecha dia {c.closingDay})
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <FormDescription>
+                  Quando escolhido, as parcelas caem na fatura certa (fecha /
+                  vence conforme o cartão).
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : null}
 
         {canInstall ? <InstallmentsField /> : null}
         {canRecur ? <RecurringToggle /> : null}

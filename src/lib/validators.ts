@@ -38,6 +38,7 @@ export const transactionSchema = z
       .min(1)
       .max(MAX_INSTALLMENTS, `Máximo ${MAX_INSTALLMENTS}x`),
     recurring: z.boolean(),
+    cardId: z.string().trim().optional(),
   })
   .refine((v) => !(v.installments > 1 && v.recurring), {
     message: "Parcelamento e recorrência são exclusivos",
@@ -97,6 +98,31 @@ export const updateHouseholdNameSchema = z.object({
 export type UpdateHouseholdNameInput = z.infer<
   typeof updateHouseholdNameSchema
 >;
+
+export const creditCardSchema = z
+  .object({
+    name: z.string().trim().min(1, "Nome obrigatório").max(40),
+    closingDay: z.coerce
+      .number()
+      .int("Dia inválido")
+      .min(1, "Dia inválido")
+      .max(31, "Dia inválido"),
+    dueDay: z.coerce
+      .number()
+      .int("Dia inválido")
+      .min(1, "Dia inválido")
+      .max(31, "Dia inválido"),
+    color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/, "Cor hex inválida")
+      .optional(),
+  })
+  .refine((v) => v.dueDay !== v.closingDay, {
+    message: "Dia de vencimento deve ser diferente do fechamento",
+    path: ["dueDay"],
+  });
+
+export type CreditCardInput = z.infer<typeof creditCardSchema>;
 
 export const customSubcategorySchema = z.object({
   category: z.enum(["essentials", "qualityOfLife", "goals"] as const),
@@ -172,6 +198,7 @@ export const recordPurchaseSchema = z
       .int()
       .min(1)
       .max(MAX_INSTALLMENTS, `Máximo ${MAX_INSTALLMENTS}x`),
+    cardId: z.string().trim().optional(),
   })
   .refine(
     (v) => !(v.installments > 1 && v.paymentMethod !== "credit"),
