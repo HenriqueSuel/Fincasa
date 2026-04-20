@@ -82,6 +82,12 @@ export const acceptInviteSchema = z.object({
 
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 
+export const updateMyIncomeSchema = z.object({
+  monthlyIncome: z.coerce.number().nonnegative("Renda inválida"),
+});
+
+export type UpdateMyIncomeInput = z.infer<typeof updateMyIncomeSchema>;
+
 export const customSubcategorySchema = z.object({
   category: z.enum(["essentials", "qualityOfLife", "goals"] as const),
   name: z.string().trim().min(1, "Nome obrigatório").max(40),

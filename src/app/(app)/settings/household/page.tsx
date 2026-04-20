@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { ArrowLeft } from "lucide-react";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
+import { EditIncomeDialog } from "./edit-income-dialog";
 import { InviteSection } from "./invite-section";
 
 export const metadata: Metadata = { title: "Família" };
@@ -14,7 +15,8 @@ const BRL = new Intl.NumberFormat("pt-BR", {
 });
 
 export default async function HouseholdSettingsPage() {
-  const { household, householdId, isOwner } = await requireHouseholdContext();
+  const { uid, household, householdId, isOwner } =
+    await requireHouseholdContext();
 
   const householdRef = adminDb().collection("households").doc(householdId);
   const pendingInvitesSnap = await householdRef
@@ -67,21 +69,34 @@ export default async function HouseholdSettingsPage() {
           Membros
         </h2>
         <ul className="flex flex-col gap-2">
-          {members.map((m) => (
-            <li
-              key={m.uid}
-              className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
-            >
-              <div>
-                <p className="font-medium">{m.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {m.role === "owner" ? "Dono" : "Membro"}
-                  {" · "}
-                  {BRL.format(m.monthlyIncome)}
-                </p>
-              </div>
-            </li>
-          ))}
+          {members.map((m) => {
+            const isSelf = m.uid === uid;
+            return (
+              <li
+                key={m.uid}
+                className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
+              >
+                <div>
+                  <p className="font-medium">
+                    {m.name}
+                    {isSelf ? (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        (você)
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {m.role === "owner" ? "Dono" : "Membro"}
+                    {" · "}
+                    {BRL.format(m.monthlyIncome)}
+                  </p>
+                </div>
+                {isSelf ? (
+                  <EditIncomeDialog currentIncome={m.monthlyIncome} />
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </section>
 
