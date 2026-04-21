@@ -56,8 +56,10 @@ export function CategoryChart({ data }: { data: CategorySlice[] }) {
               border: "1px solid var(--color-border)",
               borderRadius: 8,
               fontSize: 12,
+              color: "var(--color-foreground)",
             }}
             labelStyle={{ color: "var(--color-foreground)", fontWeight: 500 }}
+            itemStyle={{ color: "var(--color-foreground)" }}
             formatter={(value, key) => [
               formatBRL(Number(value)),
               key === "spent" ? "Gasto" : "Orçamento",

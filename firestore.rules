@@ -68,6 +68,14 @@ service cloud.firestore {
         allow read: if isMember(householdId);
         // Qualquer membro cria/edita/apaga metas (decisão de produto).
         allow create, update, delete: if isMember(householdId);
+
+        // Investimentos vinculados à meta — qualquer membro gerencia.
+        match /investments/{investmentId} {
+          allow read, write: if isMember(householdId);
+          match /events/{eventId} {
+            allow read, write: if isMember(householdId);
+          }
+        }
       }
 
       // --------------------------------------------------------------

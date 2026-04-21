@@ -63,8 +63,10 @@ export function SubcategoryChart({ data }: { data: SubcategoryPoint[] }) {
               border: "1px solid var(--color-border)",
               borderRadius: 8,
               fontSize: 12,
+              color: "var(--color-foreground)",
             }}
             labelStyle={{ color: "var(--color-foreground)", fontWeight: 500 }}
+            itemStyle={{ color: "var(--color-foreground)" }}
             formatter={(value) => [formatBRL(Number(value)), "Gasto"]}
           />
           <Bar dataKey="value" radius={[0, 6, 6, 0]}>

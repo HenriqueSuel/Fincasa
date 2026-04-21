@@ -5,6 +5,8 @@ import type {
   CustomSubcategory,
   Goal,
   Household,
+  Investment,
+  InvestmentEvent,
   Invite,
   Loan,
   LoanRepayment,
@@ -17,7 +19,13 @@ import type {
   User,
   WeightSpec,
 } from "@/types/domain";
-import type { LoanStatus, PaymentMethod, WeightUnit } from "@/types/enums";
+import type {
+  InvestmentEventType,
+  InvestmentType,
+  LoanStatus,
+  PaymentMethod,
+  WeightUnit,
+} from "@/types/enums";
 
 type Snap = FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot;
 
@@ -113,6 +121,7 @@ export function toTransaction(snap: Snap): Transaction {
     tripId: d.tripId ?? undefined,
     cardId: d.cardId ?? undefined,
     loanId: d.loanId ?? undefined,
+    investmentId: d.investmentId ?? undefined,
     date: ts(d.date),
     paymentMethod: d.paymentMethod ?? undefined,
     createdBy: d.createdBy,
@@ -289,6 +298,45 @@ export function toCreditCard(snap: Snap): CreditCard {
     dueDay: Number(d.dueDay ?? 10),
     color: d.color ?? undefined,
     createdBy: d.createdBy,
+    createdAt: ts(d.createdAt),
+  };
+}
+
+export function toInvestment(snap: Snap): Investment {
+  const d = snap.data();
+  if (!d) throw new Error("Investment doc missing");
+  const parentPath = snap.ref.parent.parent?.id ?? "";
+  return {
+    id: snap.id,
+    goalId: parentPath,
+    name: String(d.name ?? ""),
+    type: (d.type ?? "other") as InvestmentType,
+    broker: d.broker ?? undefined,
+    currentValue: Number(d.currentValue ?? 0),
+    totalContributed: Number(d.totalContributed ?? 0),
+    archived: d.archived === true,
+    lastUpdatedAt: ts(d.lastUpdatedAt ?? d.createdAt),
+    createdBy: d.createdBy,
+    createdByName: d.createdByName ?? "",
+    createdAt: ts(d.createdAt),
+  };
+}
+
+export function toInvestmentEvent(snap: Snap): InvestmentEvent {
+  const d = snap.data();
+  if (!d) throw new Error("InvestmentEvent doc missing");
+  return {
+    id: snap.id,
+    type: (d.type ?? "contribution") as InvestmentEventType,
+    amount: Number(d.amount ?? 0),
+    previousValue:
+      typeof d.previousValue === "number" ? d.previousValue : undefined,
+    newValue: typeof d.newValue === "number" ? d.newValue : undefined,
+    date: ts(d.date),
+    note: d.note ?? undefined,
+    transactionId: d.transactionId ?? undefined,
+    createdBy: d.createdBy,
+    createdByName: d.createdByName ?? "",
     createdAt: ts(d.createdAt),
   };
 }

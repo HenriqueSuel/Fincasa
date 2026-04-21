@@ -16,6 +16,30 @@ export type TransactionCategory = (typeof TRANSACTION_CATEGORY_IDS)[number];
 export const LOAN_STATUSES = ["active", "settled", "cancelled"] as const;
 export type LoanStatus = (typeof LOAN_STATUSES)[number];
 
+export const INVESTMENT_TYPES = [
+  "cdb",
+  "treasury",
+  "fund",
+  "stock",
+  "crypto",
+  "savings",
+  "other",
+] as const;
+export type InvestmentType = (typeof INVESTMENT_TYPES)[number];
+
+export const INVESTMENT_TYPE_LABELS: Record<InvestmentType, string> = {
+  cdb: "CDB",
+  treasury: "Tesouro Direto",
+  fund: "Fundo",
+  stock: "Ações",
+  crypto: "Cripto",
+  savings: "Poupança",
+  other: "Outros",
+};
+
+export const INVESTMENT_EVENT_TYPES = ["contribution", "revaluation"] as const;
+export type InvestmentEventType = (typeof INVESTMENT_EVENT_TYPES)[number];
+
 export const TRANSACTION_TYPES = ["income", "expense", "transfer"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 

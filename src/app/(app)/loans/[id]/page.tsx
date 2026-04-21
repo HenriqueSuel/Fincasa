@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { requireHouseholdContext } from "@/lib/auth/guards";
@@ -37,20 +37,31 @@ export default async function LoanDetailPage({
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-6 py-8 pb-32 max-w-2xl w-full mx-auto">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/loans"
-          className="flex size-9 items-center justify-center rounded-full border border-border hover:bg-accent transition-colors"
-          aria-label="Voltar"
-        >
-          <ArrowLeft className="size-4" />
-        </Link>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Empréstimo</p>
-          <h1 className="text-2xl font-semibold truncate">
-            {loan.debtorName}
-          </h1>
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href="/loans"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border hover:bg-accent transition-colors"
+            aria-label="Voltar"
+          >
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Empréstimo</p>
+            <h1 className="text-2xl font-semibold truncate">
+              {loan.debtorName}
+            </h1>
+          </div>
         </div>
+        {isOwner && loan.status !== "cancelled" ? (
+          <Link
+            href={`/loans/${loan.id}/edit`}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border hover:bg-accent transition-colors"
+            aria-label="Editar empréstimo"
+          >
+            <Pencil className="size-4" />
+          </Link>
+        ) : null}
       </header>
 
       <section className="rounded-2xl border border-border bg-card p-5">

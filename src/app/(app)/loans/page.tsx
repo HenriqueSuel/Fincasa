@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, HandCoins, Plus } from "lucide-react";
+import { ArrowLeft, CalendarDays, HandCoins, Plus } from "lucide-react";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listLoans } from "@/lib/loans-query";
 import { formatBRL } from "@/lib/money";
@@ -60,6 +60,21 @@ export default async function LoansPage() {
             : `${debtors.size} ${debtors.size === 1 ? "pessoa" : "pessoas"} · ${active.length} ${active.length === 1 ? "empréstimo ativo" : "empréstimos ativos"}`}
         </p>
       </section>
+
+      <Link
+        href="/loans/month"
+        className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <CalendarDays className="size-5" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium">Por pessoa no mês</p>
+          <p className="text-xs text-muted-foreground">
+            Quanto cada devedor deve pagar esse mês.
+          </p>
+        </div>
+      </Link>
 
       {active.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-8 text-center">

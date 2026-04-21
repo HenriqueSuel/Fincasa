@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   GOAL_CATEGORY_IDS,
   GOAL_PRIORITY_IDS,
+  INVESTMENT_TYPES,
   PAYMENT_METHODS,
   SHOPPING_SECTIONS,
   TRANSACTION_CATEGORY_IDS,
@@ -209,6 +210,25 @@ export const loanSchema = z
 
 export type LoanInput = z.infer<typeof loanSchema>;
 
+export const updateLoanSchema = z.object({
+  debtorName: z
+    .string()
+    .trim()
+    .min(1, "Nome obrigatório")
+    .max(60, "Máximo 60 caracteres"),
+  totalAmount: z.coerce
+    .number({ error: "Valor inválido" })
+    .positive("Valor deve ser maior que zero"),
+  lendDate: z.coerce.date({ error: "Data inválida" }),
+  description: z
+    .string()
+    .trim()
+    .max(120, "Máximo 120 caracteres")
+    .optional(),
+});
+
+export type UpdateLoanInput = z.infer<typeof updateLoanSchema>;
+
 export const repaymentSchema = z.object({
   amount: z.coerce
     .number({ error: "Valor inválido" })
@@ -219,6 +239,46 @@ export const repaymentSchema = z.object({
 });
 
 export type RepaymentInput = z.infer<typeof repaymentSchema>;
+
+export const investmentSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nome obrigatório")
+    .max(60, "Máximo 60 caracteres"),
+  type: z.enum(INVESTMENT_TYPES, { error: "Tipo obrigatório" }),
+  broker: z.string().trim().max(40, "Máximo 40 caracteres").optional(),
+  initialAmount: z.coerce
+    .number({ error: "Valor inválido" })
+    .nonnegative("Valor não pode ser negativo"),
+  startDate: z.coerce.date({ error: "Data inválida" }),
+});
+
+export type InvestmentInput = z.infer<typeof investmentSchema>;
+
+export const investmentContributionSchema = z.object({
+  amount: z.coerce
+    .number({ error: "Valor inválido" })
+    .positive("Valor deve ser maior que zero"),
+  date: z.coerce.date({ error: "Data inválida" }),
+  note: z.string().trim().max(120, "Máximo 120 caracteres").optional(),
+});
+
+export type InvestmentContributionInput = z.infer<
+  typeof investmentContributionSchema
+>;
+
+export const investmentRevaluationSchema = z.object({
+  newValue: z.coerce
+    .number({ error: "Valor inválido" })
+    .nonnegative("Valor não pode ser negativo"),
+  date: z.coerce.date({ error: "Data inválida" }),
+  note: z.string().trim().max(120, "Máximo 120 caracteres").optional(),
+});
+
+export type InvestmentRevaluationInput = z.infer<
+  typeof investmentRevaluationSchema
+>;
 
 export const recordPurchaseSchema = z
   .object({

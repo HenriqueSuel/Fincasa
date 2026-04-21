@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, LineChart, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { getGoal } from "@/lib/goals-query";
+import { listInvestments } from "@/lib/investments-query";
 import { estimateMonthsRemaining } from "@/lib/goals";
 import { formatBRL } from "@/lib/money";
 import { GoalForm } from "@/components/goals/goal-form";
 import { updateGoal } from "@/app/actions/goal";
+import { INVESTMENT_TYPE_LABELS } from "@/types/enums";
+import { cn } from "@/lib/utils";
 import { GoalActions } from "./goal-actions";
 
 export const metadata: Metadata = { title: "Meta" };
@@ -29,6 +32,12 @@ export default async function GoalDetailPage({
   const { householdId } = await requireHouseholdContext();
   const goal = await getGoal(householdId, id);
   if (!goal) notFound();
+
+  const investments = await listInvestments(householdId, id, {
+    includeArchived: true,
+  });
+  const activeInvestments = investments.filter((i) => !i.archived);
+  const archivedInvestments = investments.filter((i) => i.archived);
 
   const contributionsSnap = await adminDb()
     .collection("households")
@@ -154,6 +163,46 @@ export default async function GoalDetailPage({
       </section>
 
       <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Investimentos
+          </h2>
+          <Link
+            href={`/goals/${id}/investments/new`}
+            className="flex items-center gap-1.5 rounded-full border border-border px-3 h-8 text-xs font-medium hover:bg-accent transition-colors"
+          >
+            <Plus className="size-3.5" />
+            Adicionar
+          </Link>
+        </div>
+        {activeInvestments.length === 0 && archivedInvestments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhum investimento nessa meta. Cadastre um CDB, ação, fundo… pra
+            acompanhar o rendimento mês a mês.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {activeInvestments.map((inv) => (
+              <InvestmentRow key={inv.id} goalId={id} inv={inv} />
+            ))}
+          </ul>
+        )}
+        {archivedInvestments.length > 0 ? (
+          <details className="mt-1">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+              {archivedInvestments.length}{" "}
+              {archivedInvestments.length === 1 ? "arquivado" : "arquivados"}
+            </summary>
+            <ul className="mt-2 flex flex-col gap-2">
+              {archivedInvestments.map((inv) => (
+                <InvestmentRow key={inv.id} goalId={id} inv={inv} />
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-3">
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Últimos aportes
         </h2>
@@ -214,5 +263,68 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-muted-foreground">{label}</p>
       <p className="text-sm font-semibold text-foreground mt-0.5">{value}</p>
     </div>
+  );
+}
+
+function InvestmentRow({
+  goalId,
+  inv,
+}: {
+  goalId: string;
+  inv: Awaited<ReturnType<typeof listInvestments>>[number];
+}) {
+  const gain = inv.currentValue - inv.totalContributed;
+  const gainPct =
+    inv.totalContributed > 0 ? (gain / inv.totalContributed) * 100 : 0;
+  const isPositive = gain >= 0;
+  return (
+    <li>
+      <Link
+        href={`/goals/${goalId}/investments/${inv.id}`}
+        className={cn(
+          "flex items-start gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-accent",
+          inv.archived ? "opacity-60" : "",
+        )}
+      >
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <LineChart className="size-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">
+            {inv.name}
+            {inv.archived ? (
+              <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                arquivado
+              </span>
+            ) : null}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {INVESTMENT_TYPE_LABELS[inv.type]}
+            {inv.broker ? ` · ${inv.broker}` : ""}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-semibold tabular-nums">
+            {formatBRL(inv.currentValue)}
+          </p>
+          {inv.totalContributed > 0 ? (
+            <p
+              className={cn(
+                "flex items-center justify-end gap-1 text-[11px] tabular-nums",
+                isPositive ? "text-primary" : "text-destructive",
+              )}
+            >
+              {isPositive ? (
+                <TrendingUp className="size-3" />
+              ) : (
+                <TrendingDown className="size-3" />
+              )}
+              {isPositive ? "+" : ""}
+              {formatBRL(gain)} ({gainPct.toFixed(1)}%)
+            </p>
+          ) : null}
+        </div>
+      </Link>
+    </li>
   );
 }

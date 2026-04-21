@@ -52,8 +52,10 @@ export function MemberChart({ data }: { data: MemberSlice[] }) {
               border: "1px solid var(--color-border)",
               borderRadius: 8,
               fontSize: 12,
+              color: "var(--color-foreground)",
             }}
             labelStyle={{ color: "var(--color-foreground)", fontWeight: 500 }}
+            itemStyle={{ color: "var(--color-foreground)" }}
             formatter={(value) => formatBRL(Number(value))}
           />
           <Legend

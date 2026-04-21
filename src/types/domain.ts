@@ -4,6 +4,8 @@ import type {
   GoalCategory,
   GoalPriority,
   GoalStatus,
+  InvestmentEventType,
+  InvestmentType,
   InviteStatus,
   LoanStatus,
   MemberRole,
@@ -86,6 +88,7 @@ export interface Transaction {
   tripId?: string;
   cardId?: string;
   loanId?: string;
+  investmentId?: string;
   date: Date;
   paymentMethod?: PaymentMethod;
   createdBy: string;
@@ -249,6 +252,35 @@ export interface LoanRepayment {
   paymentMethod?: PaymentMethod;
   note?: string;
   transactionId: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: Date;
+}
+
+export interface Investment {
+  id: string;
+  goalId: string;
+  name: string;
+  type: InvestmentType;
+  broker?: string;
+  currentValue: number;
+  totalContributed: number;
+  archived: boolean;
+  lastUpdatedAt: Date;
+  createdBy: string;
+  createdByName: string;
+  createdAt: Date;
+}
+
+export interface InvestmentEvent {
+  id: string;
+  type: InvestmentEventType;
+  amount: number;
+  previousValue?: number;
+  newValue?: number;
+  date: Date;
+  note?: string;
+  transactionId?: string;
   createdBy: string;
   createdByName: string;
   createdAt: Date;

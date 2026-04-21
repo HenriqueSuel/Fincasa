@@ -15,12 +15,15 @@ import { getCard } from "@/lib/cards-query";
 import {
   loanSchema,
   repaymentSchema,
+  updateLoanSchema,
   type LoanInput,
   type RepaymentInput,
+  type UpdateLoanInput,
 } from "@/lib/validators";
 
 export type LoanState = ActionState<keyof LoanInput>;
 export type RepaymentState = ActionState<keyof RepaymentInput>;
+export type UpdateLoanState = ActionState<keyof UpdateLoanInput>;
 
 function roundCents(amount: number): number {
   return Math.round(amount * 100) / 100;
@@ -37,6 +40,17 @@ function parseLoanFormData(formData: FormData) {
     paymentMethod: String(formData.get("paymentMethod") ?? ""),
     cardId: rawCard || undefined,
     installments: formData.get("installments") ?? 1,
+    description: String(formData.get("description") ?? "").trim() || undefined,
+  });
+}
+
+function parseUpdateLoanFormData(formData: FormData) {
+  const rawDate = String(formData.get("lendDate") ?? "");
+  const parsedDate = parseLocalDate(rawDate);
+  return updateLoanSchema.safeParse({
+    debtorName: String(formData.get("debtorName") ?? ""),
+    totalAmount: formData.get("totalAmount"),
+    lendDate: parsedDate ?? rawDate,
     description: String(formData.get("description") ?? "").trim() || undefined,
   });
 }
@@ -170,6 +184,199 @@ export async function createLoan(
   revalidatePath("/loans");
   revalidatePath("/transactions");
   redirect(`/loans/${loanRef.id}?toast=loan-created`);
+}
+
+export async function updateLoan(
+  loanId: string,
+  _prev: UpdateLoanState | undefined,
+  formData: FormData,
+): Promise<UpdateLoanState> {
+  const { uid, user, householdId } = await requireHouseholdContext();
+  const parsed = parseUpdateLoanFormData(formData);
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+  }
+  const values = parsed.data;
+
+  const db = adminDb();
+  const loanRef = db
+    .collection("households")
+    .doc(householdId)
+    .collection("loans")
+    .doc(loanId);
+  const loanSnap = await loanRef.get();
+  const loan = loanSnap.data();
+  if (!loan) return { error: "Empréstimo não encontrado." };
+  if (loan.createdBy !== uid) {
+    return { error: "Só quem lançou pode editar." };
+  }
+  if (loan.status === "cancelled") {
+    return { error: "Empréstimo cancelado não pode ser editado." };
+  }
+
+  const hasRepayments = Number(loan.repaidAmount ?? 0) > 0;
+  const structuralChange =
+    !hasRepayments &&
+    (Math.abs(
+      Math.round(Number(loan.totalAmount ?? 0) * 100) -
+        Math.round(values.totalAmount * 100),
+    ) !== 0 ||
+      (loan.lendDate as Timestamp).toDate().getTime() !==
+        values.lendDate.getTime());
+
+  if (hasRepayments) {
+    const totalChanged =
+      Math.abs(
+        Math.round(Number(loan.totalAmount ?? 0) * 100) -
+          Math.round(values.totalAmount * 100),
+      ) !== 0;
+    const dateChanged =
+      (loan.lendDate as Timestamp).toDate().getTime() !==
+      values.lendDate.getTime();
+    if (totalChanged || dateChanged) {
+      return {
+        error:
+          "Com pagamentos registrados só dá pra mudar nome e descrição. Apague os pagamentos pra alterar valor ou data.",
+      };
+    }
+  }
+
+  const now = Timestamp.now();
+  const installments = Number(loan.installments ?? 1);
+  const paymentMethod = String(loan.paymentMethod ?? "pix");
+  const cardId = (loan.cardId as string | undefined) ?? null;
+
+  const txCol = db
+    .collection("households")
+    .doc(householdId)
+    .collection("transactions");
+  const txsSnap = await txCol.where("loanId", "==", loanId).get();
+  const expenseDocs = txsSnap.docs.filter(
+    (d) => d.data().type === "expense",
+  );
+
+  let newSchedule: {
+    dueDate: Timestamp;
+    amount: number;
+    transactionId: string;
+  }[] = [];
+
+  if (structuralChange) {
+    const card =
+      cardId && paymentMethod === "credit"
+        ? await getCard(householdId, cardId)
+        : null;
+    const dates =
+      paymentMethod === "credit"
+        ? computeInstallmentDates(values.lendDate, installments, card)
+        : [values.lendDate];
+
+    const totalCents = Math.round(values.totalAmount * 100);
+    const baseCents = Math.floor(totalCents / installments);
+    const remainderCents = totalCents - baseCents * installments;
+
+    const existingSchedule = Array.isArray(loan.schedule) ? loan.schedule : [];
+    for (let i = 0; i < installments; i++) {
+      const cents = i === 0 ? baseCents + remainderCents : baseCents;
+      const amount = cents / 100;
+      const due =
+        dates[i] ??
+        (card ? firstInvoiceDueDate(values.lendDate, card) : values.lendDate);
+      const existingTxId = existingSchedule[i]?.transactionId as
+        | string
+        | undefined;
+      newSchedule.push({
+        dueDate: Timestamp.fromDate(due),
+        amount,
+        transactionId: existingTxId ?? txCol.doc().id,
+      });
+    }
+  } else {
+    newSchedule = (Array.isArray(loan.schedule) ? loan.schedule : []).map(
+      (s: {
+        dueDate: Timestamp;
+        amount: number;
+        transactionId: string;
+      }) => ({
+        dueDate: s.dueDate,
+        amount: s.amount,
+        transactionId: s.transactionId,
+      }),
+    );
+  }
+
+  const batch = db.batch();
+
+  const outstandingNow = roundCents(
+    values.totalAmount - Number(loan.repaidAmount ?? 0),
+  );
+
+  batch.update(loanRef, {
+    debtorName: values.debtorName,
+    debtorNameLower: values.debtorName.toLowerCase(),
+    totalAmount: values.totalAmount,
+    outstandingAmount: Math.max(0, outstandingNow),
+    lendDate: Timestamp.fromDate(values.lendDate),
+    description: values.description ?? null,
+    schedule: newSchedule,
+    updatedAt: now,
+  });
+
+  const existingTxByNumber = new Map<number, FirebaseFirestore.QueryDocumentSnapshot>();
+  for (const d of expenseDocs) {
+    const n = Number(d.data().installmentNumber ?? 1);
+    existingTxByNumber.set(n, d);
+  }
+
+  for (let i = 0; i < installments; i++) {
+    const entry = newSchedule[i]!;
+    const existing = existingTxByNumber.get(i + 1);
+    const desc = `Empréstimo · ${values.debtorName}${
+      installments > 1 ? ` (${i + 1}/${installments})` : ""
+    }`;
+    const base = {
+      description: desc,
+      amount: entry.amount,
+      date: entry.dueDate,
+      ...(installments > 1 ? { installmentTotal: values.totalAmount } : {}),
+      updatedAt: now,
+    };
+    if (existing) {
+      batch.update(existing.ref, base);
+    } else {
+      batch.set(txCol.doc(entry.transactionId), {
+        type: "expense",
+        amount: entry.amount,
+        description: desc,
+        category: "loans",
+        subcategory: "Empréstimo",
+        date: entry.dueDate,
+        paymentMethod,
+        ...(cardId ? { cardId } : {}),
+        loanId,
+        ...(installments > 1
+          ? {
+              installmentId: loanId,
+              installmentNumber: i + 1,
+              installmentCount: installments,
+              installmentTotal: values.totalAmount,
+            }
+          : {}),
+        createdBy: uid,
+        createdByName: user.name,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  await batch.commit();
+
+  revalidatePath("/");
+  revalidatePath("/loans");
+  revalidatePath(`/loans/${loanId}`);
+  revalidatePath("/transactions");
+  redirect(`/loans/${loanId}?toast=loan-updated`);
 }
 
 export async function recordRepayment(
