@@ -157,6 +157,14 @@ export default async function TransactionsPage({
   const expense = transactions
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
+  let investedOut = 0;
+  let investedIn = 0;
+  for (const t of transactions) {
+    if (t.type !== "investment") continue;
+    if (t.investmentDirection === "in") investedIn += t.amount;
+    else investedOut += t.amount;
+  }
+  const investedNet = investedOut - investedIn;
 
   const prevYear = monthIndex === 0 ? year - 1 : year;
   const prevMonth = monthIndex === 0 ? 11 : monthIndex - 1;
@@ -243,18 +251,29 @@ export default async function TransactionsPage({
           cards={cards.map((c) => ({ id: c.id, name: c.name }))}
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-card p-3">
             <p className="text-xs text-muted-foreground">Entradas</p>
-            <p className="text-lg font-semibold text-primary">
+            <p className="text-lg font-semibold text-primary tabular-nums">
               {formatBRL(income)}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card p-3">
             <p className="text-xs text-muted-foreground">Saídas</p>
-            <p className="text-lg font-semibold text-destructive">
+            <p className="text-lg font-semibold text-destructive tabular-nums">
               {formatBRL(expense)}
             </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">Investido</p>
+            <p className="text-lg font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
+              {formatBRL(investedNet)}
+            </p>
+            {investedIn > 0 ? (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Resgates {formatBRL(investedIn)}
+              </p>
+            ) : null}
           </div>
         </div>
       </header>

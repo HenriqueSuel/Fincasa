@@ -59,6 +59,12 @@ async function sumByBudgetCategory(
   const txs = await listTransactions({ householdId, from, to });
   const totals = { essentials: 0, qualityOfLife: 0, goals: 0 };
   for (const t of txs) {
+    if (t.type === "investment") {
+      // Aporte − resgate entra em Objetivos.
+      const sign = t.investmentDirection === "in" ? -1 : 1;
+      totals.goals += sign * t.amount;
+      continue;
+    }
     if (t.type !== "expense") continue;
     if (t.category === "essentials") totals.essentials += t.amount;
     else if (t.category === "qualityOfLife") totals.qualityOfLife += t.amount;
@@ -169,6 +175,11 @@ export async function memberBreakdown(
       .reduce((s, t) => s + t.amount, 0);
     const byCategory = { essentials: 0, qualityOfLife: 0, goals: 0 };
     for (const t of own) {
+      if (t.type === "investment") {
+        const sign = t.investmentDirection === "in" ? -1 : 1;
+        byCategory.goals += sign * t.amount;
+        continue;
+      }
       if (t.type !== "expense") continue;
       if (t.category === "essentials") byCategory.essentials += t.amount;
       else if (t.category === "qualityOfLife") byCategory.qualityOfLife += t.amount;
@@ -193,23 +204,28 @@ export async function subcategoryBreakdown(
   };
   const map = new Map<string, SubcategoryPoint>();
   for (const t of txs) {
-    if (t.type !== "expense") continue;
-    if (
-      t.category !== "essentials" &&
-      t.category !== "qualityOfLife" &&
-      t.category !== "goals"
-    ) {
+    // Expense nos 3 buckets + aportes entram (como subcategoria "Aporte").
+    const isExpenseInBudget =
+      t.type === "expense" &&
+      (t.category === "essentials" ||
+        t.category === "qualityOfLife" ||
+        t.category === "goals");
+    const isAporte =
+      t.type === "investment" && t.investmentDirection === "out";
+    if (!isExpenseInBudget && !isAporte) continue;
+    const cat = t.category;
+    if (cat !== "essentials" && cat !== "qualityOfLife" && cat !== "goals") {
       continue;
     }
-    const key = `${t.category}::${t.subcategory}`;
+    const key = `${cat}::${t.subcategory}`;
     const existing = map.get(key);
     if (existing) {
       existing.spent += t.amount;
     } else {
       map.set(key, {
         name: t.subcategory,
-        category: t.category,
-        color: colorByCategory[t.category] ?? "#6B7280",
+        category: cat,
+        color: colorByCategory[cat] ?? "#6B7280",
         spent: t.amount,
       });
     }

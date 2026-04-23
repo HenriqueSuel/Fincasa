@@ -82,6 +82,8 @@ export default async function Dashboard({
     else if (t.category === "goals") spentByCat.goals += t.amount;
   }
   const investedNet = investmentsOut - investmentsIn;
+  // Aportes − resgates também alocam na fatia "Objetivos" do 40/15/45.
+  spentByCat.goals += investedNet;
 
   const baseIncome =
     view === "mine"
