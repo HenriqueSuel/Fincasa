@@ -12,7 +12,7 @@ import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
 import { listCards } from "@/lib/cards-query";
 import { CATEGORIES } from "@/lib/categories";
-import { formatBRL, formatSignedBRL } from "@/lib/money";
+import { formatBRL, signedAmountPresentation } from "@/lib/money";
 import { toLocalDateKey } from "@/lib/dates";
 import { ViewToggle } from "@/components/transactions/view-toggle";
 import { TransactionsFilters } from "@/components/transactions/transactions-filters";
@@ -43,6 +43,7 @@ function categoryIcon(category: string, subcategory: string): string {
   if (category === "income") return "💰";
   if (category === "transfer") return "↔️";
   if (category === "loans") return "🤝";
+  if (subcategory === "Aporte" || subcategory === "Resgate") return "📈";
   return "💸";
 }
 
@@ -51,7 +52,8 @@ type CategoryFilter =
   | "essentials"
   | "qualityOfLife"
   | "goals"
-  | "income";
+  | "income"
+  | "investment";
 
 export default async function TransactionsPage({
   searchParams,
@@ -108,7 +110,8 @@ export default async function TransactionsPage({
     rawCat === "essentials" ||
     rawCat === "qualityOfLife" ||
     rawCat === "goals" ||
-    rawCat === "income"
+    rawCat === "income" ||
+    rawCat === "investment"
       ? rawCat
       : "all";
   const searchTerm = (rawQ ?? "").trim().toLowerCase();
@@ -121,6 +124,8 @@ export default async function TransactionsPage({
     if (category !== "all") {
       if (category === "income") {
         if (t.type !== "income") return false;
+      } else if (category === "investment") {
+        if (t.type !== "investment") return false;
       } else if (t.category !== category) {
         return false;
       }
@@ -312,15 +317,20 @@ export default async function TransactionsPage({
                         </p>
                       </div>
                       <div className="text-right">
-                        <p
-                          className={
-                            t.type === "income"
-                              ? "text-sm font-semibold text-primary"
-                              : "text-sm font-semibold text-destructive"
-                          }
-                        >
-                          {formatSignedBRL(t.amount, t.type)}
-                        </p>
+                        {(() => {
+                          const presentation = signedAmountPresentation(
+                            t.type,
+                            t.amount,
+                            t.investmentDirection,
+                          );
+                          return (
+                            <p
+                              className={`text-sm font-semibold ${presentation.toneClass}`}
+                            >
+                              {presentation.signed}
+                            </p>
+                          );
+                        })()}
                         {t.createdBy === uid ? (
                           <Pencil className="size-3 text-muted-foreground ml-auto mt-0.5" />
                         ) : null}

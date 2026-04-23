@@ -9,6 +9,7 @@ import {
   CreditCard,
   HandCoins,
   ChevronRight,
+  TrendingUp,
 } from "lucide-react";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
@@ -50,6 +51,12 @@ const sections = [
     label: "Empréstimos",
     description: "Dinheiro que te devem",
     icon: HandCoins,
+  },
+  {
+    href: "/settings/migrate-investments",
+    label: "Migrar investimentos",
+    description: "Converte aportes antigos pro novo tipo",
+    icon: TrendingUp,
   },
 ];
 

@@ -44,8 +44,16 @@ export const INVESTMENT_EVENT_TYPES = [
 ] as const;
 export type InvestmentEventType = (typeof INVESTMENT_EVENT_TYPES)[number];
 
-export const TRANSACTION_TYPES = ["income", "expense", "transfer"] as const;
+export const TRANSACTION_TYPES = [
+  "income",
+  "expense",
+  "transfer",
+  "investment",
+] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
+
+export const INVESTMENT_DIRECTIONS = ["out", "in"] as const;
+export type InvestmentDirection = (typeof INVESTMENT_DIRECTIONS)[number];
 
 export const PAYMENT_METHODS = ["pix", "credit", "debit", "cash"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];

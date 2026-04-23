@@ -25,7 +25,8 @@ type CategoryFilter =
   | "essentials"
   | "qualityOfLife"
   | "goals"
-  | "income";
+  | "income"
+  | "investment";
 
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: "all", label: "Todas" },
@@ -33,6 +34,7 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: "qualityOfLife", label: "Qualidade" },
   { id: "goals", label: "Objetivos" },
   { id: "income", label: "Receitas" },
+  { id: "investment", label: "Investimentos" },
 ];
 
 export function TransactionsFilters({

@@ -13,6 +13,7 @@ import { formatBRL } from "@/lib/money";
 import {
   categoryBreakdown,
   categoryComparison,
+  investmentSummary,
   memberBreakdown,
   monthlyTrend,
   subcategoryBreakdown,
@@ -50,12 +51,14 @@ export default async function ReportsPage({
     name: m.name,
   }));
 
-  const [byCategory, byMember, trend, topSubcategories] = await Promise.all([
-    categoryBreakdown(householdId, year, monthIndex, baseIncome),
-    memberBreakdown(householdId, year, monthIndex, members),
-    monthlyTrend(householdId, year, monthIndex, 6),
-    subcategoryBreakdown(householdId, year, monthIndex, 5),
-  ]);
+  const [byCategory, byMember, trend, topSubcategories, invSummary] =
+    await Promise.all([
+      categoryBreakdown(householdId, year, monthIndex, baseIncome),
+      memberBreakdown(householdId, year, monthIndex, members),
+      monthlyTrend(householdId, year, monthIndex, 6),
+      subcategoryBreakdown(householdId, year, monthIndex, 5),
+      investmentSummary(householdId, year, monthIndex),
+    ]);
   const comparisons = await categoryComparison(
     householdId,
     year,
@@ -122,9 +125,19 @@ export default async function ReportsPage({
         </Link>
       </div>
 
-      <section className="grid grid-cols-3 gap-3">
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Entradas" value={formatBRL(totalIncome)} tone="positive" />
         <StatCard label="Saídas" value={formatBRL(totalExpense)} tone="negative" />
+        <StatCard
+          label="Investimentos"
+          value={formatBRL(invSummary.net)}
+          tone="neutral"
+          hint={
+            invSummary.withdrawals > 0
+              ? `Resgates ${formatBRL(invSummary.withdrawals)}`
+              : undefined
+          }
+        />
         <StatCard
           label="Taxa de poupança"
           value={`${savingsRate}%`}
@@ -254,19 +267,19 @@ function StatCard({
 }: {
   label: string;
   value: string;
-  tone: "positive" | "negative";
+  tone: "positive" | "negative" | "neutral";
   hint?: string;
 }) {
+  const toneClass =
+    tone === "positive"
+      ? "text-primary"
+      : tone === "negative"
+        ? "text-destructive"
+        : "text-amber-600 dark:text-amber-400";
   return (
     <div className="rounded-xl border border-border bg-card p-3">
       <p className="text-xs text-muted-foreground truncate">{label}</p>
-      <p
-        className={
-          tone === "positive"
-            ? "text-base font-semibold text-primary truncate"
-            : "text-base font-semibold text-destructive truncate"
-        }
-      >
+      <p className={cn("text-base font-semibold truncate", toneClass)}>
         {value}
       </p>
       {hint ? (

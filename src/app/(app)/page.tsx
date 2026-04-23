@@ -67,13 +67,21 @@ export default async function Dashboard({
     .reduce((s, t) => s + t.amount, 0);
 
   const spentByCat = { essentials: 0, qualityOfLife: 0, goals: 0 };
+  let investmentsOut = 0;
+  let investmentsIn = 0;
   for (const t of transactions) {
+    if (t.type === "investment") {
+      if (t.investmentDirection === "in") investmentsIn += t.amount;
+      else investmentsOut += t.amount;
+      continue;
+    }
     if (t.type !== "expense") continue;
     if (t.category === "essentials") spentByCat.essentials += t.amount;
     else if (t.category === "qualityOfLife")
       spentByCat.qualityOfLife += t.amount;
     else if (t.category === "goals") spentByCat.goals += t.amount;
   }
+  const investedNet = investmentsOut - investmentsIn;
 
   const baseIncome =
     view === "mine"
@@ -184,6 +192,22 @@ export default async function Dashboard({
           Renda base: {formatBRL(baseIncome)}
         </p>
       </section>
+
+      {investmentsOut > 0 || investmentsIn > 0 ? (
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-xs text-muted-foreground">Investimentos no mês</p>
+          <p className="text-3xl font-semibold mt-1 text-amber-600 dark:text-amber-400 tabular-nums">
+            {investedNet >= 0 ? "" : "− "}
+            {formatBRL(Math.abs(investedNet))}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Aportes {formatBRL(investmentsOut)}
+            {investmentsIn > 0
+              ? ` · Resgates ${formatBRL(investmentsIn)}`
+              : ""}
+          </p>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">

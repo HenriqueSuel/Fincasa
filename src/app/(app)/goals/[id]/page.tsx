@@ -60,6 +60,45 @@ export default async function GoalDetailPage({
     };
   });
 
+  // Agregado dos investimentos ativos pra seção "Rendimento total"
+  const investmentStats = (() => {
+    if (activeInvestments.length === 0) return null;
+    const totalContributed = activeInvestments.reduce(
+      (s, i) => s + i.totalContributed,
+      0,
+    );
+    const totalCurrent = activeInvestments.reduce(
+      (s, i) => s + i.currentValue,
+      0,
+    );
+    const gain = totalCurrent - totalContributed;
+    const pctGain = totalContributed > 0 ? (gain / totalContributed) * 100 : 0;
+    const earliestMs = Math.min(
+      ...activeInvestments.map((i) => i.createdAt.getTime()),
+    );
+    const monthsElapsed =
+      (Date.now() - earliestMs) / (1000 * 60 * 60 * 24 * 30.44);
+    let monthlyPct: number | null = null;
+    let annualPct: number | null = null;
+    if (totalContributed > 0 && monthsElapsed >= 1) {
+      const ratio = totalCurrent / totalContributed;
+      if (ratio > 0) {
+        const monthly = Math.pow(ratio, 1 / monthsElapsed) - 1;
+        monthlyPct = monthly * 100;
+        annualPct = (Math.pow(1 + monthly, 12) - 1) * 100;
+      }
+    }
+    return {
+      totalContributed,
+      totalCurrent,
+      gain,
+      pctGain,
+      monthlyPct,
+      annualPct,
+      monthsElapsed,
+    };
+  })();
+
   const pct =
     goal.targetAmount > 0
       ? Math.min(100, (goal.currentAmount / goal.targetAmount) * 100)
@@ -175,6 +214,88 @@ export default async function GoalDetailPage({
             Adicionar
           </Link>
         </div>
+
+        {investmentStats ? (
+          <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Rendimento total
+                </p>
+                <p
+                  className={cn(
+                    "text-2xl font-semibold mt-1 tabular-nums flex items-center gap-1",
+                    investmentStats.gain >= 0
+                      ? "text-primary"
+                      : "text-destructive",
+                  )}
+                >
+                  {investmentStats.gain >= 0 ? (
+                    <TrendingUp className="size-5" />
+                  ) : (
+                    <TrendingDown className="size-5" />
+                  )}
+                  {investmentStats.gain >= 0 ? "+" : ""}
+                  {formatBRL(investmentStats.gain)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                  {investmentStats.pctGain >= 0 ? "+" : ""}
+                  {investmentStats.pctGain.toFixed(2)}% sobre{" "}
+                  {formatBRL(investmentStats.totalContributed)} aportado
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-xl border border-border bg-background p-3">
+                <p className="text-muted-foreground">Equivalente a.m.</p>
+                <p
+                  className={cn(
+                    "text-sm font-semibold mt-0.5 tabular-nums",
+                    investmentStats.monthlyPct === null
+                      ? "text-muted-foreground"
+                      : investmentStats.monthlyPct >= 0
+                        ? "text-primary"
+                        : "text-destructive",
+                  )}
+                >
+                  {investmentStats.monthlyPct === null
+                    ? "—"
+                    : `${investmentStats.monthlyPct >= 0 ? "+" : ""}${investmentStats.monthlyPct.toFixed(2)}%`}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-3">
+                <p className="text-muted-foreground">Equivalente a.a.</p>
+                <p
+                  className={cn(
+                    "text-sm font-semibold mt-0.5 tabular-nums",
+                    investmentStats.annualPct === null
+                      ? "text-muted-foreground"
+                      : investmentStats.annualPct >= 0
+                        ? "text-primary"
+                        : "text-destructive",
+                  )}
+                >
+                  {investmentStats.annualPct === null
+                    ? "—"
+                    : `${investmentStats.annualPct >= 0 ? "+" : ""}${investmentStats.annualPct.toFixed(2)}%`}
+                </p>
+              </div>
+            </div>
+            {investmentStats.monthlyPct === null ? (
+              <p className="text-[11px] text-muted-foreground">
+                Ainda sem dados suficientes pra calcular taxa (precisa de pelo
+                menos 1 mês desde o primeiro aporte).
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Posição: {formatBRL(investmentStats.totalCurrent)} ·{" "}
+                {investmentStats.monthsElapsed.toFixed(1)} meses desde o
+                primeiro aporte.
+              </p>
+            )}
+          </div>
+        ) : null}
+
         {activeInvestments.length === 0 && archivedInvestments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nenhum investimento nessa meta. Cadastre um CDB, ação, fundo… pra

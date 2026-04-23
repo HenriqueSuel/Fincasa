@@ -20,6 +20,7 @@ import type {
   WeightSpec,
 } from "@/types/domain";
 import type {
+  InvestmentDirection,
   InvestmentEventType,
   InvestmentType,
   LoanStatus,
@@ -122,6 +123,10 @@ export function toTransaction(snap: Snap): Transaction {
     cardId: d.cardId ?? undefined,
     loanId: d.loanId ?? undefined,
     investmentId: d.investmentId ?? undefined,
+    investmentDirection:
+      d.investmentDirection === "out" || d.investmentDirection === "in"
+        ? (d.investmentDirection as InvestmentDirection)
+        : undefined,
     date: ts(d.date),
     paymentMethod: d.paymentMethod ?? undefined,
     createdBy: d.createdBy,

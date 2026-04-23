@@ -124,7 +124,8 @@ export async function createInvestment(
     const txRef = txCol.doc();
     const eventRef = investmentRef.collection("events").doc();
     batch.set(txRef, {
-      type: "expense",
+      type: "investment",
+      investmentDirection: "out",
       amount: initial,
       description: `Aporte · ${values.name}`,
       category: "goals",
@@ -197,7 +198,8 @@ export async function contributeInvestment(
 
   const batch = db.batch();
   batch.set(txRef, {
-    type: "expense",
+    type: "investment",
+    investmentDirection: "out",
     amount: values.amount,
     description: `Aporte · ${inv.name}`,
     category: "goals",
@@ -359,7 +361,8 @@ export async function withdrawInvestment(
 
   const batch = db.batch();
   batch.set(txRef, {
-    type: "income",
+    type: "investment",
+    investmentDirection: "in",
     amount: values.amount,
     description: `Resgate · ${inv.name}`,
     category: "goals",
@@ -442,6 +445,67 @@ export async function archiveInvestment(
   revalidatePath("/goals");
   revalidatePath(`/goals/${goalId}`);
   revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+}
+
+/**
+ * Migra transações antigas (pré type=investment) que estão ligadas a algum
+ * investmentId mas foram criadas com type=expense (aporte) ou type=income
+ * (resgate). Atualiza pra type=investment + investmentDirection correto.
+ *
+ * Idempotente: transações já no formato novo são ignoradas.
+ */
+export async function migrateInvestmentTransactions(): Promise<{
+  migrated: number;
+  skipped: number;
+}> {
+  const { householdId } = await requireHouseholdContext();
+  const db = adminDb();
+  const snap = await db
+    .collection("households")
+    .doc(householdId)
+    .collection("transactions")
+    .get();
+
+  let migrated = 0;
+  let skipped = 0;
+  const BATCH_SIZE = 400;
+  let batch = db.batch();
+  let inBatch = 0;
+
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (!d.investmentId) continue;
+    if (d.type === "investment") {
+      skipped++;
+      continue;
+    }
+    let direction: "out" | "in" | null = null;
+    if (d.type === "expense") direction = "out";
+    else if (d.type === "income") direction = "in";
+    if (!direction) {
+      skipped++;
+      continue;
+    }
+    batch.update(doc.ref, {
+      type: "investment",
+      investmentDirection: direction,
+      updatedAt: Timestamp.now(),
+    });
+    migrated++;
+    inBatch++;
+    if (inBatch >= BATCH_SIZE) {
+      await batch.commit();
+      batch = db.batch();
+      inBatch = 0;
+    }
+  }
+  if (inBatch > 0) await batch.commit();
+
+  revalidatePath("/");
+  revalidatePath("/transactions");
+  revalidatePath("/reports");
+  revalidatePath("/goals");
+  return { migrated, skipped };
 }
 
 export async function unarchiveInvestment(

@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { getCard, listCardTransactions } from "@/lib/cards-query";
-import { formatBRL, formatSignedBRL } from "@/lib/money";
+import { formatBRL, signedAmountPresentation } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Transaction } from "@/types/domain";
 
@@ -213,15 +213,20 @@ function InvoiceSection({
                   {t.createdByName}
                 </p>
               </div>
-              <p
-                className={
-                  t.type === "income"
-                    ? "text-sm font-semibold text-primary tabular-nums"
-                    : "text-sm font-semibold text-foreground tabular-nums"
-                }
-              >
-                {formatSignedBRL(t.amount, t.type)}
-              </p>
+              {(() => {
+                const pres = signedAmountPresentation(
+                  t.type,
+                  t.amount,
+                  t.investmentDirection,
+                );
+                return (
+                  <p
+                    className={`text-sm font-semibold tabular-nums ${pres.toneClass}`}
+                  >
+                    {pres.signed}
+                  </p>
+                );
+              })()}
             </li>
           ))}
         </ul>

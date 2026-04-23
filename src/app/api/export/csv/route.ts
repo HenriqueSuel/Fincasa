@@ -18,7 +18,18 @@ const TYPE_LABEL: Record<string, string> = {
   expense: "Despesa",
   income: "Receita",
   transfer: "Transferência",
+  investment: "Investimento",
 };
+
+function typeLabel(t: {
+  type: string;
+  investmentDirection?: "out" | "in";
+}): string {
+  if (t.type === "investment") {
+    return t.investmentDirection === "in" ? "Resgate" : "Aporte";
+  }
+  return TYPE_LABEL[t.type] ?? t.type;
+}
 
 const PAYMENT_LABEL: Record<string, string> = {
   pix: "Pix",
@@ -77,7 +88,7 @@ export async function GET(request: NextRequest) {
     rows.push([
       format(t.date, "yyyy-MM-dd"),
       t.description,
-      TYPE_LABEL[t.type] ?? t.type,
+      typeLabel(t),
       CATEGORY_LABEL[t.category] ?? t.category,
       t.subcategory,
       t.amount.toFixed(2).replace(".", ","),

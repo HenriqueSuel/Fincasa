@@ -91,6 +91,33 @@ export interface CategoryComparison {
   previousLabel: string;
 }
 
+export interface InvestmentSummary {
+  contributions: number;
+  withdrawals: number;
+  net: number;
+}
+
+export async function investmentSummary(
+  householdId: string,
+  year: number,
+  month: number,
+): Promise<InvestmentSummary> {
+  const { from, to } = monthRange(year, month);
+  const txs = await listTransactions({ householdId, from, to });
+  let contributions = 0;
+  let withdrawals = 0;
+  for (const t of txs) {
+    if (t.type !== "investment") continue;
+    if (t.investmentDirection === "in") withdrawals += t.amount;
+    else contributions += t.amount;
+  }
+  return {
+    contributions,
+    withdrawals,
+    net: contributions - withdrawals,
+  };
+}
+
 export async function categoryComparison(
   householdId: string,
   year: number,

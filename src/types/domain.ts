@@ -4,6 +4,7 @@ import type {
   GoalCategory,
   GoalPriority,
   GoalStatus,
+  InvestmentDirection,
   InvestmentEventType,
   InvestmentType,
   InviteStatus,
@@ -89,6 +90,7 @@ export interface Transaction {
   cardId?: string;
   loanId?: string;
   investmentId?: string;
+  investmentDirection?: InvestmentDirection;
   date: Date;
   paymentMethod?: PaymentMethod;
   createdBy: string;
