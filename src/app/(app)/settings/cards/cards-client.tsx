@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FormProvider, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -251,23 +252,29 @@ function CardRow({
 
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <div
-        className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-primary"
-        style={
-          card.color
-            ? { backgroundColor: `${card.color}20`, color: card.color }
-            : { backgroundColor: "var(--color-primary)", opacity: 0.1 }
-        }
-        aria-hidden
+      <Link
+        href={`/cards/${card.id}`}
+        className="flex items-center gap-3 flex-1 min-w-0 -m-3 p-3 rounded-xl hover:bg-accent transition-colors"
       >
-        {card.name.charAt(0).toUpperCase()}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{card.name}</p>
-        <p className="text-xs text-muted-foreground">
-          Fecha dia {card.closingDay} · vence dia {card.dueDay}
-        </p>
-      </div>
+        <div
+          className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-primary"
+          style={
+            card.color
+              ? { backgroundColor: `${card.color}20`, color: card.color }
+              : { backgroundColor: "var(--color-primary)", opacity: 0.1 }
+          }
+          aria-hidden
+        >
+          {card.name.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate">{card.name}</p>
+          <p className="text-xs text-muted-foreground">
+            Fecha dia {card.closingDay} · vence dia {card.dueDay}
+          </p>
+        </div>
+        <ChevronRight className="size-4 text-muted-foreground" />
+      </Link>
       <Button
         type="button"
         size="icon"

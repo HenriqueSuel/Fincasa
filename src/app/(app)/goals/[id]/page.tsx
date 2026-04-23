@@ -266,6 +266,13 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+const STALE_DAYS = 30;
+
+function isStale(date: Date): boolean {
+  const diffMs = Date.now() - date.getTime();
+  return diffMs > STALE_DAYS * 24 * 60 * 60 * 1000;
+}
+
 function InvestmentRow({
   goalId,
   inv,
@@ -277,6 +284,7 @@ function InvestmentRow({
   const gainPct =
     inv.totalContributed > 0 ? (gain / inv.totalContributed) * 100 : 0;
   const isPositive = gain >= 0;
+  const stale = !inv.archived && isStale(inv.lastUpdatedAt);
   return (
     <li>
       <Link
@@ -295,6 +303,11 @@ function InvestmentRow({
             {inv.archived ? (
               <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
                 arquivado
+              </span>
+            ) : null}
+            {stale ? (
+              <span className="ml-2 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                atualizar
               </span>
             ) : null}
           </p>

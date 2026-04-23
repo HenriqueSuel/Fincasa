@@ -37,7 +37,11 @@ export const INVESTMENT_TYPE_LABELS: Record<InvestmentType, string> = {
   other: "Outros",
 };
 
-export const INVESTMENT_EVENT_TYPES = ["contribution", "revaluation"] as const;
+export const INVESTMENT_EVENT_TYPES = [
+  "contribution",
+  "revaluation",
+  "withdrawal",
+] as const;
 export type InvestmentEventType = (typeof INVESTMENT_EVENT_TYPES)[number];
 
 export const TRANSACTION_TYPES = ["income", "expense", "transfer"] as const;

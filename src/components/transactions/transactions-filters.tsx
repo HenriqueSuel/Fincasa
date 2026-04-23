@@ -11,6 +11,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type CategoryFilter =
@@ -32,10 +39,14 @@ export function TransactionsFilters({
   currentCategory,
   currentSearch,
   currentValueCents,
+  currentCardId,
+  cards,
 }: {
   currentCategory: CategoryFilter;
   currentSearch: string;
   currentValueCents: number;
+  currentCardId: string | null;
+  cards: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -60,6 +71,13 @@ export function TransactionsFilters({
     const next = new URLSearchParams(params);
     if (cat === "all") next.delete("cat");
     else next.set("cat", cat);
+    navigate(next);
+  }
+
+  function applyCard(id: string | null) {
+    const next = new URLSearchParams(params);
+    if (!id) next.delete("card");
+    else next.set("card", id);
     navigate(next);
   }
 
@@ -152,6 +170,25 @@ export function TransactionsFilters({
           ) : null}
         </div>
       </div>
+
+      {cards.length > 0 ? (
+        <Select
+          value={currentCardId ?? "__all__"}
+          onValueChange={(v) => applyCard(v === "__all__" ? null : v)}
+        >
+          <SelectTrigger className="w-full" aria-label="Filtrar por cartão">
+            <SelectValue placeholder="Todos os cartões" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos os cartões</SelectItem>
+            {cards.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
 
       <div className="flex gap-2 overflow-x-auto -mx-6 px-6 pb-1">
         {CATEGORY_OPTIONS.map((c) => (

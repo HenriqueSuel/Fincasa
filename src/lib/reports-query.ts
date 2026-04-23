@@ -50,12 +50,11 @@ const CATEGORY_META: {
   { id: "goals", label: "Objetivos", color: "#10B981", allocation: 0.45 },
 ];
 
-export async function categoryBreakdown(
+async function sumByBudgetCategory(
   householdId: string,
   year: number,
   month: number,
-  baseIncome: number,
-): Promise<CategorySlice[]> {
+) {
   const { from, to } = monthRange(year, month);
   const txs = await listTransactions({ householdId, from, to });
   const totals = { essentials: 0, qualityOfLife: 0, goals: 0 };
@@ -65,6 +64,16 @@ export async function categoryBreakdown(
     else if (t.category === "qualityOfLife") totals.qualityOfLife += t.amount;
     else if (t.category === "goals") totals.goals += t.amount;
   }
+  return totals;
+}
+
+export async function categoryBreakdown(
+  householdId: string,
+  year: number,
+  month: number,
+  baseIncome: number,
+): Promise<CategorySlice[]> {
+  const totals = await sumByBudgetCategory(householdId, year, month);
   return CATEGORY_META.map((m) => ({
     category: m.id,
     label: m.label,
@@ -72,6 +81,45 @@ export async function categoryBreakdown(
     spent: totals[m.id],
     budget: baseIncome * m.allocation,
   }));
+}
+
+export interface CategoryComparison {
+  category: CategorySlice["category"];
+  previousSpent: number;
+  changeAbs: number;
+  changePct: number | null;
+  previousLabel: string;
+}
+
+export async function categoryComparison(
+  householdId: string,
+  year: number,
+  month: number,
+  current: CategorySlice[],
+): Promise<CategoryComparison[]> {
+  const prevMonthIndex = month === 0 ? 11 : month - 1;
+  const prevYear = month === 0 ? year - 1 : year;
+  const previous = await sumByBudgetCategory(
+    householdId,
+    prevYear,
+    prevMonthIndex,
+  );
+  const previousLabel = new Date(prevYear, prevMonthIndex, 1).toLocaleDateString(
+    "pt-BR",
+    { month: "short", year: "2-digit" },
+  );
+  return current.map((c) => {
+    const prev = previous[c.category];
+    const changeAbs = c.spent - prev;
+    const changePct = prev > 0 ? (changeAbs / prev) * 100 : null;
+    return {
+      category: c.category,
+      previousSpent: prev,
+      changeAbs,
+      changePct,
+      previousLabel,
+    };
+  });
 }
 
 export async function memberBreakdown(

@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowUp, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { requireHouseholdContext } from "@/lib/auth/guards";
@@ -13,6 +19,7 @@ import {
 import { formatBRL } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { INVESTMENT_TYPE_LABELS } from "@/types/enums";
+import { InvestmentValueChart } from "@/components/charts/investment-value-chart";
 import { InvestmentDetailClient } from "./investment-detail-client";
 
 export const metadata: Metadata = { title: "Investimento" };
@@ -36,6 +43,9 @@ export default async function InvestmentDetailPage({
   const gainPct =
     inv.totalContributed > 0 ? (gain / inv.totalContributed) * 100 : 0;
   const isPositive = gain >= 0;
+  const stale =
+    !inv.archived &&
+    Date.now() - inv.lastUpdatedAt.getTime() > 30 * 24 * 60 * 60 * 1000;
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-6 py-8 pb-32 max-w-2xl w-full mx-auto">
@@ -104,9 +114,16 @@ export default async function InvestmentDetailPage({
             )}
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          Última atualização: {format(inv.lastUpdatedAt, "dd/MM/yyyy HH:mm")}
-        </p>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span>
+            Última atualização: {format(inv.lastUpdatedAt, "dd/MM/yyyy HH:mm")}
+          </span>
+          {stale ? (
+            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              atualizar
+            </span>
+          ) : null}
+        </div>
       </section>
 
       <InvestmentDetailClient
@@ -115,6 +132,24 @@ export default async function InvestmentDetailPage({
         currentValue={inv.currentValue}
         archived={inv.archived}
       />
+
+      {events.length >= 2 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Evolução da posição
+          </h2>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <InvestmentValueChart
+              events={events.map((e) => ({
+                type: e.type,
+                date: e.date,
+                amount: e.amount,
+                newValue: e.newValue,
+              }))}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -128,7 +163,14 @@ export default async function InvestmentDetailPage({
           <ul className="flex flex-col gap-1.5">
             {events.map((e) => {
               const isContribution = e.type === "contribution";
+              const isWithdrawal = e.type === "withdrawal";
+              const isRevaluation = e.type === "revaluation";
               const isPositiveEvent = e.amount >= 0;
+              const label = isContribution
+                ? "Aporte"
+                : isWithdrawal
+                  ? "Resgate"
+                  : "Atualização de valor";
               return (
                 <li
                   key={e.id}
@@ -139,13 +181,17 @@ export default async function InvestmentDetailPage({
                       "flex size-9 shrink-0 items-center justify-center rounded-full",
                       isContribution
                         ? "bg-primary/10 text-primary"
-                        : isPositiveEvent
-                          ? "bg-primary/10 text-primary"
-                          : "bg-destructive/10 text-destructive",
+                        : isWithdrawal
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          : isPositiveEvent
+                            ? "bg-primary/10 text-primary"
+                            : "bg-destructive/10 text-destructive",
                     )}
                   >
                     {isContribution ? (
                       <ArrowUp className="size-4" />
+                    ) : isWithdrawal ? (
+                      <ArrowDown className="size-4" />
                     ) : isPositiveEvent ? (
                       <TrendingUp className="size-4" />
                     ) : (
@@ -153,16 +199,14 @@ export default async function InvestmentDetailPage({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">
-                      {isContribution ? "Aporte" : "Atualização de valor"}
-                    </p>
+                    <p className="text-sm font-medium">{label}</p>
                     <p className="text-xs text-muted-foreground">
                       {format(e.date, "dd 'de' MMM, yyyy", { locale: ptBR })}
                       {" · "}
                       {e.createdByName}
                       {e.note ? ` · ${e.note}` : ""}
                     </p>
-                    {!isContribution &&
+                    {(isRevaluation || isWithdrawal) &&
                     typeof e.previousValue === "number" &&
                     typeof e.newValue === "number" ? (
                       <p className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
@@ -176,14 +220,18 @@ export default async function InvestmentDetailPage({
                       "text-sm font-semibold tabular-nums",
                       isContribution
                         ? "text-foreground"
-                        : isPositiveEvent
-                          ? "text-primary"
-                          : "text-destructive",
+                        : isWithdrawal
+                          ? "text-amber-600 dark:text-amber-400"
+                          : isPositiveEvent
+                            ? "text-primary"
+                            : "text-destructive",
                     )}
                   >
                     {isContribution
                       ? formatBRL(e.amount)
-                      : `${isPositiveEvent ? "+" : ""}${formatBRL(e.amount)}`}
+                      : isWithdrawal
+                        ? `− ${formatBRL(e.amount)}`
+                        : `${isPositiveEvent ? "+" : ""}${formatBRL(e.amount)}`}
                   </p>
                 </li>
               );

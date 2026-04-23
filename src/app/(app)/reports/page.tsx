@@ -1,14 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { formatBRL } from "@/lib/money";
 import {
   categoryBreakdown,
+  categoryComparison,
   memberBreakdown,
   monthlyTrend,
   subcategoryBreakdown,
 } from "@/lib/reports-query";
+import { cn } from "@/lib/utils";
 import { CategoryChart } from "@/components/charts/category-chart";
 import { MemberChart } from "@/components/charts/member-chart";
 import { MonthlyChart } from "@/components/charts/monthly-chart";
@@ -47,6 +56,15 @@ export default async function ReportsPage({
     monthlyTrend(householdId, year, monthIndex, 6),
     subcategoryBreakdown(householdId, year, monthIndex, 5),
   ]);
+  const comparisons = await categoryComparison(
+    householdId,
+    year,
+    monthIndex,
+    byCategory,
+  );
+  const comparisonByCategory = Object.fromEntries(
+    comparisons.map((c) => [c.category, c]),
+  );
 
   const totalIncome = byMember.reduce((s, m) => s + m.income, 0);
   const totalExpense = byMember.reduce((s, m) => s + m.expense, 0);
@@ -119,7 +137,7 @@ export default async function ReportsPage({
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
           Orçamento 40/15/45
         </h2>
-        <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-4">
           {baseIncome === 0 ? (
             <p className="text-sm text-muted-foreground">
               Defina a renda da família em <Link href="/settings/household" className="text-primary underline underline-offset-4">Família</Link> pra ver o orçamento.
@@ -127,6 +145,27 @@ export default async function ReportsPage({
           ) : (
             <CategoryChart data={byCategory} />
           )}
+          <ul className="flex flex-col gap-1.5">
+            {byCategory.map((c) => {
+              const comp = comparisonByCategory[c.category];
+              return (
+                <li
+                  key={c.category}
+                  className="flex items-center justify-between gap-3 text-sm"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: c.color }}
+                      aria-hidden
+                    />
+                    <span className="truncate">{c.label}</span>
+                  </span>
+                  {comp ? <CategoryDelta comp={comp} /> : null}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </section>
 
@@ -159,6 +198,51 @@ export default async function ReportsPage({
         </div>
       </section>
     </main>
+  );
+}
+
+function CategoryDelta({
+  comp,
+}: {
+  comp: NonNullable<Awaited<ReturnType<typeof categoryComparison>>[number]>;
+}) {
+  // Expense up vs prev = worse (destructive). Down = better (primary).
+  const hasData = comp.previousSpent > 0 || comp.changeAbs !== 0;
+  if (!hasData) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        sem dado em {comp.previousLabel}
+      </span>
+    );
+  }
+  if (comp.changePct === null) {
+    return (
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {comp.changeAbs > 0 ? "+" : ""}
+        {formatBRL(comp.changeAbs)} vs {comp.previousLabel}
+      </span>
+    );
+  }
+  const isDown = comp.changePct < 0;
+  const formatted = `${comp.changePct > 0 ? "+" : ""}${comp.changePct.toFixed(0)}%`;
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1 text-xs tabular-nums",
+        isDown ? "text-primary" : "text-destructive",
+      )}
+      title={`${formatBRL(comp.previousSpent)} em ${comp.previousLabel}`}
+    >
+      {isDown ? (
+        <TrendingDown className="size-3" />
+      ) : (
+        <TrendingUp className="size-3" />
+      )}
+      {formatted}
+      <span className="text-muted-foreground font-normal">
+        vs {comp.previousLabel}
+      </span>
+    </span>
   );
 }
 

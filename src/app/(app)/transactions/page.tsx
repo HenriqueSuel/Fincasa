@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { listTransactions, monthRange } from "@/lib/transactions-query";
+import { listCards } from "@/lib/cards-query";
 import { CATEGORIES } from "@/lib/categories";
 import { formatBRL, formatSignedBRL } from "@/lib/money";
 import { toLocalDateKey } from "@/lib/dates";
@@ -62,6 +63,7 @@ export default async function TransactionsPage({
     cat?: string;
     q?: string;
     v?: string;
+    card?: string;
   }>;
 }) {
   const {
@@ -71,6 +73,7 @@ export default async function TransactionsPage({
     cat: rawCat,
     q: rawQ,
     v: rawV,
+    card: rawCard,
   } = await searchParams;
   const ctx = await requireHouseholdContext();
   const { uid, householdId, partnerId } = ctx;
@@ -88,12 +91,18 @@ export default async function TransactionsPage({
     view === "mine" ? uid : view === "partner" ? partnerId : undefined;
 
   const { from, to } = monthRange(year, monthIndex);
-  const allTransactions = await listTransactions({
-    householdId,
-    from,
-    to,
-    memberId,
-  });
+  const [allTransactions, cards] = await Promise.all([
+    listTransactions({
+      householdId,
+      from,
+      to,
+      memberId,
+    }),
+    listCards(householdId),
+  ]);
+  const cardFilter = rawCard?.trim() || null;
+  const validCardId =
+    cardFilter && cards.some((c) => c.id === cardFilter) ? cardFilter : null;
 
   const category: CategoryFilter =
     rawCat === "essentials" ||
@@ -122,6 +131,9 @@ export default async function TransactionsPage({
     }
     if (valueCents !== null) {
       if (Math.round(t.amount * 100) !== valueCents) return false;
+    }
+    if (validCardId) {
+      if (t.cardId !== validCardId) return false;
     }
     return true;
   });
@@ -153,6 +165,7 @@ export default async function TransactionsPage({
       cat: category === "all" ? undefined : category,
       q: searchTerm || undefined,
       v: valueCents !== null ? String(valueCents) : undefined,
+      card: validCardId ?? undefined,
       ...overrides,
     };
     const sp = new URLSearchParams();
@@ -221,6 +234,8 @@ export default async function TransactionsPage({
           currentCategory={category}
           currentSearch={searchTerm}
           currentValueCents={valueCents ?? 0}
+          currentCardId={validCardId}
+          cards={cards.map((c) => ({ id: c.id, name: c.name }))}
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -242,7 +257,7 @@ export default async function TransactionsPage({
       {transactions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            {category !== "all" || searchTerm || valueCents !== null
+            {category !== "all" || searchTerm || valueCents !== null || validCardId
               ? "Nenhuma transação bate com os filtros."
               : "Nenhuma transação nesse mês."}
           </p>

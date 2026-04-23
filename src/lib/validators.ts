@@ -280,6 +280,18 @@ export type InvestmentRevaluationInput = z.infer<
   typeof investmentRevaluationSchema
 >;
 
+export const investmentWithdrawalSchema = z.object({
+  amount: z.coerce
+    .number({ error: "Valor inválido" })
+    .positive("Valor deve ser maior que zero"),
+  date: z.coerce.date({ error: "Data inválida" }),
+  note: z.string().trim().max(120, "Máximo 120 caracteres").optional(),
+});
+
+export type InvestmentWithdrawalInput = z.infer<
+  typeof investmentWithdrawalSchema
+>;
+
 export const recordPurchaseSchema = z
   .object({
     amount: z.coerce.number().positive("Valor total deve ser maior que zero"),

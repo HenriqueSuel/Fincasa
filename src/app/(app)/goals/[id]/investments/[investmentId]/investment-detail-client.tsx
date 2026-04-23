@@ -6,7 +6,13 @@ import { FormProvider, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, Plus, TrendingUp } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Banknote,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
@@ -29,15 +35,19 @@ import { toLocalDateKey } from "@/lib/dates";
 import {
   investmentContributionSchema,
   investmentRevaluationSchema,
+  investmentWithdrawalSchema,
   type InvestmentContributionInput,
   type InvestmentRevaluationInput,
+  type InvestmentWithdrawalInput,
 } from "@/lib/validators";
 import {
   archiveInvestment,
   contributeInvestment,
   revalueInvestment,
   unarchiveInvestment,
+  withdrawInvestment,
 } from "@/app/actions/investment";
+import { formatBRL } from "@/lib/money";
 
 interface Props {
   goalId: string;
@@ -55,6 +65,7 @@ export function InvestmentDetailClient({
   const router = useRouter();
   const [contribOpen, setContribOpen] = useState(false);
   const [revalueOpen, setRevalueOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [archivePending, startArchiveTransition] = useTransition();
 
   function handleArchive() {
@@ -118,6 +129,18 @@ export function InvestmentDetailClient({
         </Button>
       </div>
 
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setWithdrawOpen(true)}
+        disabled={currentValue <= 0}
+        className="self-start"
+      >
+        <Banknote className="size-4" />
+        Resgatar
+      </Button>
+
       <ConfirmDialog
         title="Arquivar este investimento?"
         description="O valor atual sai da posição da meta, mas todo o histórico fica preservado. Você pode restaurar depois."
@@ -148,6 +171,14 @@ export function InvestmentDetailClient({
       <RevaluationDialog
         open={revalueOpen}
         onOpenChange={setRevalueOpen}
+        goalId={goalId}
+        investmentId={investmentId}
+        currentValue={currentValue}
+      />
+
+      <WithdrawalDialog
+        open={withdrawOpen}
+        onOpenChange={setWithdrawOpen}
         goalId={goalId}
         investmentId={investmentId}
         currentValue={currentValue}
@@ -492,6 +523,188 @@ function RevaluationDialog({
               </Button>
               <Button type="submit" disabled={pending}>
                 {pending ? "Salvando…" : "Atualizar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </FormProvider>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WithdrawalDialog({
+  open,
+  onOpenChange,
+  goalId,
+  investmentId,
+  currentValue,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  goalId: string;
+  investmentId: string;
+  currentValue: number;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const form = useForm<InvestmentWithdrawalInput>({
+    resolver: zodResolver(
+      investmentWithdrawalSchema,
+    ) as Resolver<InvestmentWithdrawalInput>,
+    defaultValues: {
+      amount: currentValue,
+      date: new Date(),
+      note: undefined,
+    },
+  });
+
+  const amount = form.watch("amount") ?? 0;
+  const willSettle = amount > 0 && Math.abs(amount - currentValue) < 0.001;
+
+  function onSubmit(values: InvestmentWithdrawalInput) {
+    const fd = new FormData();
+    fd.set("amount", String(values.amount));
+    fd.set("date", toLocalDateKey(values.date));
+    if (values.note) fd.set("note", values.note);
+
+    startTransition(async () => {
+      const result = await withdrawInvestment(
+        goalId,
+        investmentId,
+        undefined,
+        fd,
+      );
+      if (result?.fieldErrors) {
+        for (const [field, msg] of Object.entries(result.fieldErrors)) {
+          form.setError(field as keyof InvestmentWithdrawalInput, {
+            message: msg,
+          });
+        }
+        return;
+      }
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        willSettle ? "Resgate total registrado." : "Resgate registrado.",
+      );
+      form.reset({ amount: 0, date: new Date(), note: undefined });
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Resgatar</DialogTitle>
+        </DialogHeader>
+        <FormProvider {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
+          >
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="wd-amount">Valor resgatado</FormLabel>
+                  <FormControl>
+                    <MoneyInput
+                      id="wd-amount"
+                      value={field.value ?? 0}
+                      onValueChange={field.onChange}
+                      onBlur={field.onBlur}
+                      className="h-11 text-lg font-semibold"
+                      required
+                    />
+                  </FormControl>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      Posição atual: {formatBRL(currentValue)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(currentValue)}
+                      className="text-primary underline underline-offset-4"
+                    >
+                      Resgatar tudo
+                    </button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="wd-date">Data</FormLabel>
+                  <FormControl>
+                    <Input
+                      id="wd-date"
+                      type="date"
+                      value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                      onChange={(e) => {
+                        const [y, m, d] = e.target.value.split("-").map(Number);
+                        if (y && m && d)
+                          field.onChange(new Date(y, m - 1, d));
+                      }}
+                      onBlur={field.onBlur}
+                      required
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="note"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="wd-note">Nota (opcional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      id="wd-note"
+                      type="text"
+                      maxLength={120}
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <p className="text-xs text-muted-foreground">
+              Vira receita em Objetivos · Resgate. A posição da meta diminui
+              pelo valor resgatado.
+              {willSettle
+                ? " Como está resgatando tudo, o investimento será arquivado automaticamente."
+                : ""}
+            </p>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={pending}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Salvando…" : "Resgatar"}
               </Button>
             </DialogFooter>
           </form>

@@ -11,9 +11,11 @@ import {
   investmentSchema,
   investmentContributionSchema,
   investmentRevaluationSchema,
+  investmentWithdrawalSchema,
   type InvestmentContributionInput,
   type InvestmentInput,
   type InvestmentRevaluationInput,
+  type InvestmentWithdrawalInput,
 } from "@/lib/validators";
 import { INVESTMENT_TYPE_LABELS } from "@/types/enums";
 
@@ -23,6 +25,9 @@ export type InvestmentContributionState = ActionState<
 >;
 export type InvestmentRevaluationState = ActionState<
   keyof InvestmentRevaluationInput
+>;
+export type InvestmentWithdrawalState = ActionState<
+  keyof InvestmentWithdrawalInput
 >;
 
 function roundCents(value: number): number {
@@ -56,6 +61,16 @@ function parseRevaluationFormData(formData: FormData) {
   const parsedDate = parseLocalDate(rawDate);
   return investmentRevaluationSchema.safeParse({
     newValue: formData.get("newValue"),
+    date: parsedDate ?? rawDate,
+    note: String(formData.get("note") ?? "").trim() || undefined,
+  });
+}
+
+function parseWithdrawalFormData(formData: FormData) {
+  const rawDate = String(formData.get("date") ?? "");
+  const parsedDate = parseLocalDate(rawDate);
+  return investmentWithdrawalSchema.safeParse({
+    amount: formData.get("amount"),
     date: parsedDate ?? rawDate,
     note: String(formData.get("note") ?? "").trim() || undefined,
   });
@@ -283,6 +298,112 @@ export async function revalueInvestment(
   revalidatePath("/goals");
   revalidatePath(`/goals/${goalId}`);
   revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+  return { success: true };
+}
+
+export async function withdrawInvestment(
+  goalId: string,
+  investmentId: string,
+  _prev: InvestmentWithdrawalState | undefined,
+  formData: FormData,
+): Promise<InvestmentWithdrawalState> {
+  const { uid, user, householdId } = await requireHouseholdContext();
+  const parsed = parseWithdrawalFormData(formData);
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+  }
+  const values = parsed.data;
+
+  const db = adminDb();
+  const goalRef = db
+    .collection("households")
+    .doc(householdId)
+    .collection("goals")
+    .doc(goalId);
+  const investmentRef = goalRef.collection("investments").doc(investmentId);
+  const invSnap = await investmentRef.get();
+  const inv = invSnap.data();
+  if (!inv) return { error: "Investimento não encontrado." };
+  if (inv.archived) return { error: "Investimento arquivado." };
+
+  const currentValue = Number(inv.currentValue ?? 0);
+  const totalContributed = Number(inv.totalContributed ?? 0);
+
+  if (values.amount - currentValue > 0.001) {
+    return {
+      fieldErrors: {
+        amount: "Valor maior que a posição atual.",
+      },
+    };
+  }
+
+  const isFull = Math.abs(currentValue - values.amount) < 0.001;
+  const proportion = currentValue > 0 ? values.amount / currentValue : 1;
+  const contributedOut = isFull
+    ? totalContributed
+    : roundCents(totalContributed * proportion);
+  const newCurrentValue = isFull
+    ? 0
+    : roundCents(currentValue - values.amount);
+  const newTotalContributed = isFull
+    ? 0
+    : roundCents(totalContributed - contributedOut);
+
+  const now = Timestamp.now();
+  const txCol = db
+    .collection("households")
+    .doc(householdId)
+    .collection("transactions");
+  const txRef = txCol.doc();
+  const eventRef = investmentRef.collection("events").doc();
+
+  const batch = db.batch();
+  batch.set(txRef, {
+    type: "income",
+    amount: values.amount,
+    description: `Resgate · ${inv.name}`,
+    category: "goals",
+    subcategory: "Resgate",
+    customSubcategory:
+      INVESTMENT_TYPE_LABELS[inv.type as keyof typeof INVESTMENT_TYPE_LABELS] ??
+      "Investimento",
+    goalId,
+    investmentId,
+    date: Timestamp.fromDate(values.date),
+    createdBy: uid,
+    createdByName: user.name,
+    createdAt: now,
+    updatedAt: now,
+  });
+  batch.set(eventRef, {
+    type: "withdrawal",
+    amount: values.amount,
+    previousValue: currentValue,
+    newValue: newCurrentValue,
+    date: Timestamp.fromDate(values.date),
+    ...(values.note ? { note: values.note } : {}),
+    transactionId: txRef.id,
+    createdBy: uid,
+    createdByName: user.name,
+    createdAt: now,
+  });
+  const investmentUpdate: Record<string, unknown> = {
+    currentValue: newCurrentValue,
+    totalContributed: newTotalContributed,
+    lastUpdatedAt: now,
+  };
+  if (isFull) investmentUpdate.archived = true;
+  batch.update(investmentRef, investmentUpdate);
+  batch.update(goalRef, {
+    currentAmount: FieldValue.increment(-values.amount),
+  });
+  await batch.commit();
+
+  revalidatePath("/");
+  revalidatePath("/goals");
+  revalidatePath(`/goals/${goalId}`);
+  revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+  revalidatePath("/transactions");
   return { success: true };
 }
 
