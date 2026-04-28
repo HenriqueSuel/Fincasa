@@ -2,14 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  ArrowDown,
   ArrowLeft,
-  ArrowUp,
+  Pencil,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { requireHouseholdContext } from "@/lib/auth/guards";
 import { getGoal } from "@/lib/goals-query";
 import {
@@ -21,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { INVESTMENT_TYPE_LABELS } from "@/types/enums";
 import { InvestmentValueChart } from "@/components/charts/investment-value-chart";
 import { InvestmentDetailClient } from "./investment-detail-client";
+import { EventHistoryList } from "./event-history-list";
 
 export const metadata: Metadata = { title: "Investimento" };
 
@@ -49,18 +48,29 @@ export default async function InvestmentDetailPage({
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-6 py-8 pb-32 max-w-2xl w-full mx-auto">
-      <header className="flex items-center gap-3">
-        <Link
-          href={`/goals/${goalId}`}
-          className="flex size-9 items-center justify-center rounded-full border border-border hover:bg-accent transition-colors"
-          aria-label="Voltar"
-        >
-          <ArrowLeft className="size-4" />
-        </Link>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{goal.name}</p>
-          <h1 className="text-2xl font-semibold truncate">{inv.name}</h1>
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href={`/goals/${goalId}`}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border hover:bg-accent transition-colors"
+            aria-label="Voltar"
+          >
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{goal.name}</p>
+            <h1 className="text-2xl font-semibold truncate">{inv.name}</h1>
+          </div>
         </div>
+        {!inv.archived ? (
+          <Link
+            href={`/goals/${goalId}/investments/${investmentId}/edit`}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border hover:bg-accent transition-colors"
+            aria-label="Editar investimento"
+          >
+            <Pencil className="size-4" />
+          </Link>
+        ) : null}
       </header>
 
       <section className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-3">
@@ -155,89 +165,21 @@ export default async function InvestmentDetailPage({
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Histórico
         </h2>
-        {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Sem movimentações ainda.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {events.map((e) => {
-              const isContribution = e.type === "contribution";
-              const isWithdrawal = e.type === "withdrawal";
-              const isRevaluation = e.type === "revaluation";
-              const isPositiveEvent = e.amount >= 0;
-              const label = isContribution
-                ? "Aporte"
-                : isWithdrawal
-                  ? "Resgate"
-                  : "Atualização de valor";
-              return (
-                <li
-                  key={e.id}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-3"
-                >
-                  <div
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-full",
-                      isContribution
-                        ? "bg-primary/10 text-primary"
-                        : isWithdrawal
-                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                          : isPositiveEvent
-                            ? "bg-primary/10 text-primary"
-                            : "bg-destructive/10 text-destructive",
-                    )}
-                  >
-                    {isContribution ? (
-                      <ArrowUp className="size-4" />
-                    ) : isWithdrawal ? (
-                      <ArrowDown className="size-4" />
-                    ) : isPositiveEvent ? (
-                      <TrendingUp className="size-4" />
-                    ) : (
-                      <TrendingDown className="size-4" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(e.date, "dd 'de' MMM, yyyy", { locale: ptBR })}
-                      {" · "}
-                      {e.createdByName}
-                      {e.note ? ` · ${e.note}` : ""}
-                    </p>
-                    {(isRevaluation || isWithdrawal) &&
-                    typeof e.previousValue === "number" &&
-                    typeof e.newValue === "number" ? (
-                      <p className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
-                        {formatBRL(e.previousValue)} →{" "}
-                        {formatBRL(e.newValue)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p
-                    className={cn(
-                      "text-sm font-semibold tabular-nums",
-                      isContribution
-                        ? "text-foreground"
-                        : isWithdrawal
-                          ? "text-amber-600 dark:text-amber-400"
-                          : isPositiveEvent
-                            ? "text-primary"
-                            : "text-destructive",
-                    )}
-                  >
-                    {isContribution
-                      ? formatBRL(e.amount)
-                      : isWithdrawal
-                        ? `− ${formatBRL(e.amount)}`
-                        : `${isPositiveEvent ? "+" : ""}${formatBRL(e.amount)}`}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <EventHistoryList
+          goalId={goalId}
+          investmentId={investmentId}
+          canEdit={!inv.archived}
+          events={events.map((e) => ({
+            id: e.id,
+            type: e.type,
+            amount: e.amount,
+            previousValue: e.previousValue,
+            newValue: e.newValue,
+            date: e.date,
+            note: e.note,
+            createdByName: e.createdByName,
+          }))}
+        />
       </section>
     </main>
   );

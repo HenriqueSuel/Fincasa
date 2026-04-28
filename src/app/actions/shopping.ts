@@ -620,19 +620,33 @@ export async function updateShoppingItem(
     return { fieldErrors: applyFieldErrors(parsed.error.issues) };
   }
 
-  const ref = adminDb()
-    .collection("households")
-    .doc(ctx.householdId)
-    .collection("shoppingItems")
-    .doc(itemId);
+  const db = adminDb();
+  const householdRef = db.collection("households").doc(ctx.householdId);
+  const itemRef = householdRef.collection("shoppingItems").doc(itemId);
 
-  await ref.update({
+  // Propaga nome/seção pras entries da lista (que guardam snapshots).
+  // Sem isso, alterar o catálogo não reflete na lista atual até o usuário
+  // remover e adicionar de novo.
+  const entriesSnap = await householdRef
+    .collection("shoppingList")
+    .where("itemId", "==", itemId)
+    .get();
+
+  const batch = db.batch();
+  batch.update(itemRef, {
     name: parsed.data.name,
     nameLower: parsed.data.name.toLowerCase(),
     nameNormalized: normalizeName(parsed.data.name),
     section: parsed.data.section,
     defaultBrand: parsed.data.defaultBrand || null,
   });
+  for (const doc of entriesSnap.docs) {
+    batch.update(doc.ref, {
+      itemName: parsed.data.name,
+      itemSection: parsed.data.section,
+    });
+  }
+  await batch.commit();
 
   revalidatePath("/shopping");
   revalidatePath(`/shopping/items/${itemId}`);

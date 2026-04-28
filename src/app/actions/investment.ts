@@ -12,10 +12,12 @@ import {
   investmentContributionSchema,
   investmentRevaluationSchema,
   investmentWithdrawalSchema,
+  updateInvestmentMetaSchema,
   type InvestmentContributionInput,
   type InvestmentInput,
   type InvestmentRevaluationInput,
   type InvestmentWithdrawalInput,
+  type UpdateInvestmentMetaInput,
 } from "@/lib/validators";
 import { INVESTMENT_TYPE_LABELS } from "@/types/enums";
 
@@ -28,6 +30,9 @@ export type InvestmentRevaluationState = ActionState<
 >;
 export type InvestmentWithdrawalState = ActionState<
   keyof InvestmentWithdrawalInput
+>;
+export type UpdateInvestmentMetaState = ActionState<
+  keyof UpdateInvestmentMetaInput
 >;
 
 function roundCents(value: number): number {
@@ -74,6 +79,50 @@ function parseWithdrawalFormData(formData: FormData) {
     date: parsedDate ?? rawDate,
     note: String(formData.get("note") ?? "").trim() || undefined,
   });
+}
+
+function parseUpdateMetaFormData(formData: FormData) {
+  return updateInvestmentMetaSchema.safeParse({
+    name: String(formData.get("name") ?? ""),
+    type: String(formData.get("type") ?? ""),
+    broker: String(formData.get("broker") ?? "").trim() || undefined,
+  });
+}
+
+interface ReplayEvent {
+  type: "contribution" | "revaluation" | "withdrawal";
+  amount: number;
+  newValue?: number;
+  date: Date;
+}
+
+/**
+ * Reaplica os eventos em ordem e retorna o `currentValue` e `totalContributed`
+ * resultantes. Permite editar/apagar qualquer evento sem perder consistência.
+ */
+function replayEvents(events: ReplayEvent[]): {
+  currentValue: number;
+  totalContributed: number;
+} {
+  let currentValue = 0;
+  let totalContributed = 0;
+  for (const e of events) {
+    if (e.type === "contribution") {
+      currentValue += e.amount;
+      totalContributed += e.amount;
+    } else if (e.type === "revaluation") {
+      if (typeof e.newValue === "number") currentValue = e.newValue;
+    } else if (e.type === "withdrawal") {
+      const proportion = currentValue > 0 ? e.amount / currentValue : 1;
+      const contributedOut = totalContributed * proportion;
+      currentValue = Math.max(0, currentValue - e.amount);
+      totalContributed = Math.max(0, totalContributed - contributedOut);
+    }
+  }
+  return {
+    currentValue: roundCents(currentValue),
+    totalContributed: roundCents(totalContributed),
+  };
 }
 
 export async function createInvestment(
@@ -445,6 +494,342 @@ export async function archiveInvestment(
   revalidatePath("/goals");
   revalidatePath(`/goals/${goalId}`);
   revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+}
+
+/**
+ * Edita metadados do investimento (nome, tipo, corretora). Não toca valores.
+ * Também propaga o novo nome pras descrições das transações vinculadas.
+ */
+export async function updateInvestment(
+  goalId: string,
+  investmentId: string,
+  _prev: UpdateInvestmentMetaState | undefined,
+  formData: FormData,
+): Promise<UpdateInvestmentMetaState> {
+  const { householdId } = await requireHouseholdContext();
+  const parsed = parseUpdateMetaFormData(formData);
+  if (!parsed.success) {
+    return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+  }
+  const values = parsed.data;
+
+  const db = adminDb();
+  const goalRef = db
+    .collection("households")
+    .doc(householdId)
+    .collection("goals")
+    .doc(goalId);
+  const investmentRef = goalRef.collection("investments").doc(investmentId);
+  const invSnap = await investmentRef.get();
+  const inv = invSnap.data();
+  if (!inv) return { error: "Investimento não encontrado." };
+
+  const txCol = db
+    .collection("households")
+    .doc(householdId)
+    .collection("transactions");
+  const txsSnap = await txCol.where("investmentId", "==", investmentId).get();
+
+  const now = Timestamp.now();
+  const batch = db.batch();
+  batch.update(investmentRef, {
+    name: values.name,
+    type: values.type,
+    broker: values.broker ?? null,
+    lastUpdatedAt: now,
+  });
+  // Atualiza descrição das transações com o novo nome.
+  for (const doc of txsSnap.docs) {
+    const d = doc.data();
+    const isWithdraw = d.investmentDirection === "in";
+    const newDesc = `${isWithdraw ? "Resgate" : "Aporte"} · ${values.name}`;
+    batch.update(doc.ref, {
+      description: newDesc,
+      customSubcategory: INVESTMENT_TYPE_LABELS[values.type],
+      updatedAt: now,
+    });
+  }
+  await batch.commit();
+
+  revalidatePath("/");
+  revalidatePath("/goals");
+  revalidatePath(`/goals/${goalId}`);
+  revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+  revalidatePath("/transactions");
+  redirect(
+    `/goals/${goalId}/investments/${investmentId}?toast=inv-updated`,
+  );
+}
+
+/**
+ * Edita um evento (aporte ou revaluation). Replay completo dos eventos pra
+ * recalcular currentValue/totalContributed; ajusta goal.currentAmount pelo
+ * delta resultante. Withdrawal não é editável (use apagar + recriar).
+ */
+export async function updateInvestmentEvent(
+  goalId: string,
+  investmentId: string,
+  eventId: string,
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  const { uid, user, householdId } = await requireHouseholdContext();
+  const db = adminDb();
+  const goalRef = db
+    .collection("households")
+    .doc(householdId)
+    .collection("goals")
+    .doc(goalId);
+  const investmentRef = goalRef.collection("investments").doc(investmentId);
+  const eventRef = investmentRef.collection("events").doc(eventId);
+
+  const [invSnap, eventSnap, eventsSnap] = await Promise.all([
+    investmentRef.get(),
+    eventRef.get(),
+    investmentRef.collection("events").orderBy("date", "asc").get(),
+  ]);
+  const inv = invSnap.data();
+  const event = eventSnap.data();
+  if (!inv) return { error: "Investimento não encontrado." };
+  if (!event) return { error: "Evento não encontrado." };
+  const eventType = event.type as "contribution" | "revaluation" | "withdrawal";
+  if (eventType === "withdrawal") {
+    return { error: "Edição de resgate não é suportada. Apague e crie de novo." };
+  }
+
+  // Validação por tipo
+  let newAmount: number | undefined;
+  let newNewValue: number | undefined;
+  let newDate: Date | null = null;
+  let newNote: string | undefined;
+  if (eventType === "contribution") {
+    const parsed = investmentContributionSchema.safeParse({
+      amount: formData.get("amount"),
+      date:
+        parseLocalDate(String(formData.get("date") ?? "")) ??
+        String(formData.get("date") ?? ""),
+      note: String(formData.get("note") ?? "").trim() || undefined,
+    });
+    if (!parsed.success) {
+      return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+    }
+    newAmount = parsed.data.amount;
+    newDate = parsed.data.date;
+    newNote = parsed.data.note;
+  } else {
+    const parsed = investmentRevaluationSchema.safeParse({
+      newValue: formData.get("newValue"),
+      date:
+        parseLocalDate(String(formData.get("date") ?? "")) ??
+        String(formData.get("date") ?? ""),
+      note: String(formData.get("note") ?? "").trim() || undefined,
+    });
+    if (!parsed.success) {
+      return { fieldErrors: applyFieldErrors(parsed.error.issues) };
+    }
+    newNewValue = parsed.data.newValue;
+    newDate = parsed.data.date;
+    newNote = parsed.data.note;
+  }
+
+  // Replay com a substituição aplicada
+  const replayInput: ReplayEvent[] = eventsSnap.docs
+    .map((d) => {
+      const data = d.data();
+      const isEdited = d.id === eventId;
+      const date =
+        isEdited && newDate
+          ? newDate
+          : (data.date as Timestamp).toDate();
+      const baseType = data.type as ReplayEvent["type"];
+      if (isEdited && eventType === "contribution") {
+        return {
+          type: "contribution" as const,
+          amount: newAmount!,
+          date,
+        };
+      }
+      if (isEdited && eventType === "revaluation") {
+        return {
+          type: "revaluation" as const,
+          amount: 0,
+          newValue: newNewValue!,
+          date,
+        };
+      }
+      return {
+        type: baseType,
+        amount: Number(data.amount ?? 0),
+        newValue:
+          typeof data.newValue === "number" ? data.newValue : undefined,
+        date: (data.date as Timestamp).toDate(),
+      };
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const newState = replayEvents(replayInput);
+  const oldCurrentValue = Number(inv.currentValue ?? 0);
+  const deltaGoal = roundCents(newState.currentValue - oldCurrentValue);
+
+  const now = Timestamp.now();
+  const batch = db.batch();
+
+  // Update event doc
+  if (eventType === "contribution") {
+    batch.update(eventRef, {
+      amount: newAmount,
+      date: Timestamp.fromDate(newDate!),
+      note: newNote ?? null,
+    });
+    // Update linked transaction
+    if (event.transactionId) {
+      const txRef = db
+        .collection("households")
+        .doc(householdId)
+        .collection("transactions")
+        .doc(event.transactionId as string);
+      batch.update(txRef, {
+        amount: newAmount,
+        date: Timestamp.fromDate(newDate!),
+        description: `Aporte · ${inv.name}`,
+        updatedAt: now,
+        createdBy: uid,
+        createdByName: user.name,
+      });
+    }
+  } else {
+    // revaluation: amount = newValue - previousValue. previousValue depende
+    // do estado pré-evento no replay; vamos extrair do replay.
+    const previousValue = (() => {
+      let cv = 0;
+      let tc = 0;
+      for (const e of replayInput) {
+        if (e.date.getTime() === newDate!.getTime() && e.newValue === newNewValue) {
+          return cv;
+        }
+        if (e.type === "contribution") {
+          cv += e.amount;
+          tc += e.amount;
+        } else if (e.type === "revaluation" && typeof e.newValue === "number") {
+          cv = e.newValue;
+        } else if (e.type === "withdrawal") {
+          const prop = cv > 0 ? e.amount / cv : 1;
+          cv = Math.max(0, cv - e.amount);
+          tc = Math.max(0, tc - tc * prop);
+        }
+      }
+      return cv;
+    })();
+    batch.update(eventRef, {
+      newValue: newNewValue,
+      previousValue,
+      amount: roundCents(newNewValue! - previousValue),
+      date: Timestamp.fromDate(newDate!),
+      note: newNote ?? null,
+    });
+  }
+
+  batch.update(investmentRef, {
+    currentValue: newState.currentValue,
+    totalContributed: newState.totalContributed,
+    lastUpdatedAt: now,
+  });
+  if (deltaGoal !== 0) {
+    batch.update(goalRef, {
+      currentAmount: FieldValue.increment(deltaGoal),
+    });
+  }
+  await batch.commit();
+
+  revalidatePath("/");
+  revalidatePath("/goals");
+  revalidatePath(`/goals/${goalId}`);
+  revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+  revalidatePath("/transactions");
+  return { success: true };
+}
+
+/**
+ * Apaga um evento (aporte ou revaluation). Replay sem o evento pra recalcular
+ * currentValue/totalContributed; ajusta goal.currentAmount pelo delta. Apaga
+ * a transação vinculada se existir.
+ */
+export async function deleteInvestmentEvent(
+  goalId: string,
+  investmentId: string,
+  eventId: string,
+) {
+  const { householdId } = await requireHouseholdContext();
+  const db = adminDb();
+  const goalRef = db
+    .collection("households")
+    .doc(householdId)
+    .collection("goals")
+    .doc(goalId);
+  const investmentRef = goalRef.collection("investments").doc(investmentId);
+  const eventRef = investmentRef.collection("events").doc(eventId);
+
+  const [invSnap, eventSnap, eventsSnap] = await Promise.all([
+    investmentRef.get(),
+    eventRef.get(),
+    investmentRef.collection("events").orderBy("date", "asc").get(),
+  ]);
+  const inv = invSnap.data();
+  const event = eventSnap.data();
+  if (!inv || !event) return;
+  const eventType = event.type as "contribution" | "revaluation" | "withdrawal";
+  if (eventType === "withdrawal") {
+    throw new Error(
+      "Não é possível apagar resgate por aqui — apague o investimento se foi um erro.",
+    );
+  }
+
+  const replayInput: ReplayEvent[] = eventsSnap.docs
+    .filter((d) => d.id !== eventId)
+    .map((d) => {
+      const data = d.data();
+      return {
+        type: data.type as ReplayEvent["type"],
+        amount: Number(data.amount ?? 0),
+        newValue:
+          typeof data.newValue === "number" ? data.newValue : undefined,
+        date: (data.date as Timestamp).toDate(),
+      };
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const newState = replayEvents(replayInput);
+  const oldCurrentValue = Number(inv.currentValue ?? 0);
+  const deltaGoal = roundCents(newState.currentValue - oldCurrentValue);
+
+  const now = Timestamp.now();
+  const batch = db.batch();
+  batch.delete(eventRef);
+  if (event.transactionId) {
+    const txRef = db
+      .collection("households")
+      .doc(householdId)
+      .collection("transactions")
+      .doc(event.transactionId as string);
+    batch.delete(txRef);
+  }
+  batch.update(investmentRef, {
+    currentValue: newState.currentValue,
+    totalContributed: newState.totalContributed,
+    lastUpdatedAt: now,
+  });
+  if (deltaGoal !== 0) {
+    batch.update(goalRef, {
+      currentAmount: FieldValue.increment(deltaGoal),
+    });
+  }
+  await batch.commit();
+
+  revalidatePath("/");
+  revalidatePath("/goals");
+  revalidatePath(`/goals/${goalId}`);
+  revalidatePath(`/goals/${goalId}/investments/${investmentId}`);
+  revalidatePath("/transactions");
 }
 
 /**

@@ -256,6 +256,20 @@ export const investmentSchema = z.object({
 
 export type InvestmentInput = z.infer<typeof investmentSchema>;
 
+export const updateInvestmentMetaSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nome obrigatório")
+    .max(60, "Máximo 60 caracteres"),
+  type: z.enum(INVESTMENT_TYPES, { error: "Tipo obrigatório" }),
+  broker: z.string().trim().max(40, "Máximo 40 caracteres").optional(),
+});
+
+export type UpdateInvestmentMetaInput = z.infer<
+  typeof updateInvestmentMetaSchema
+>;
+
 export const investmentContributionSchema = z.object({
   amount: z.coerce
     .number({ error: "Valor inválido" })
